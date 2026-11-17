@@ -197,7 +197,8 @@ class SkillRegistry:
         """Sélectionne les Skills pertinentes pour une mission, sans en charger le code.
 
         Score = correspondances de mots-clés (2 pts pour une expression complète) + événements déclencheurs
-        (3 pts) + données disponibles (0,5 pt par type) + a priori appris de l'utilité passée (±1 pt).
+        (3 pts) + données disponibles (0,5 pt par type, même sans mot-clé) + a priori appris de l'utilité passée
+        (±1 pt).
         """
 
         text_stems = stems(text)
@@ -222,15 +223,16 @@ class SkillRegistry:
                 if any(_glob(pattern, event) for pattern in manifest.events):
                     score += 3.0
                     reasons.append(f"événement : {event}")
-            if score > 0:
-                hits = data_set.intersection(manifest.data)
-                if hits:
-                    score += 0.5 * len(hits)
-                    reasons.append("données : " + ", ".join(sorted(hits)))
-                if priors and manifest.name in priors:
-                    adjust = (priors[manifest.name] - 0.5) * 2.0
-                    score += adjust
-                    reasons.append(f"utilité apprise : {priors[manifest.name]:.2f}")
+            # Les données disponibles comptent même sans mot-clé : une Skill qui a de quoi analyser la situation
+            # n'est pas ignorée parce que la mission est formulée autrement (les mots-clés restent prépondérants).
+            hits = data_set.intersection(manifest.data)
+            if hits:
+                score += 0.5 * len(hits)
+                reasons.append("données : " + ", ".join(sorted(hits)))
+            if score > 0 and priors and manifest.name in priors:
+                adjust = (priors[manifest.name] - 0.5) * 2.0
+                score += adjust
+                reasons.append(f"utilité apprise : {priors[manifest.name]:.2f}")
             if score >= min_score:
                 results.append(Selection(manifest.name, round(score, 3), reasons))
         results.sort(key=lambda s: (-s.score, s.name))

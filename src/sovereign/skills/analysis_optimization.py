@@ -14,6 +14,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from sovereign.core.clock import parse_dt
 from sovereign.core.money import to_decimal
 from sovereign.core.stats import linear_fit, mean, percentile, variance, welch_t_test
 from sovereign.skills.base import (
@@ -78,6 +79,7 @@ class Project(BaseModel):
     id: str
     name: str
     status: str | None = None
+    portfolio_status: str | None = None
     owner: str | None = None
     active_users: int | None = Field(None, ge=0)
     kpis: list[KPI] = Field(default_factory=list)
@@ -279,6 +281,10 @@ def project_status(health: float | None) -> ProjectStatus:
     return "off_track"
 
 
+PAUSED = frozenset({"geler", "archiver", "fusionner"})
+"""Statuts de portefeuille décidés par business-development : plus aucun effort d'amélioration n'y est proposé."""
+
+
 def _load_projects(ctx: SkillContext, projects: list[Project]) -> list[Project]:
     if projects:
         return projects
@@ -395,6 +401,8 @@ class AnalysisOptimizationSkill(Skill):
             )
             if health is not None:
                 out.metrics[f"projects.{project.id}.health"] = health
+            if project.portfolio_status in PAUSED:
+                continue
             if status == "off_track":
                 out.insights.append(
                     Insight(
@@ -471,10 +479,12 @@ class AnalysisOptimizationSkill(Skill):
             out.summary = "Aucun projet à analyser."
         else:
             counts = {s: sum(1 for r in results if r.status == s) for s in ("on_track", "at_risk", "off_track")}
+            paused = sum(1 for p in projects if p.portfolio_status in PAUSED)
             out.summary = (
                 f"{len(results)} projet(s) : {counts['on_track']} sur la bonne voie, {counts['at_risk']} à "
                 f"risque, {counts['off_track']} hors trajectoire"
                 + (f" (santé moyenne {out.average_health:.0%})." if out.average_health is not None else ".")
+                + (f" {paused} gelé(s), archivé(s) ou à fusionner : aucune amélioration proposée." if paused else "")
             )
         return out
 
@@ -583,7 +593,10 @@ class AnalysisOptimizationSkill(Skill):
         analysis = self.analyze_projects(ctx, ProjectsInput(projects=projects))
         unused = self.detect_unused_features(ctx, UnusedFeaturesInput(projects=projects))
         items: list[BacklogItem] = []
+        paused = {p.id for p in projects if p.portfolio_status in PAUSED}
         for health in analysis.projects:
+            if health.id in paused:
+                continue
             total_weight = sum(k.weight for k in health.kpis) or 1.0
             for kpi in health.kpis:
                 share = kpi.weight / total_weight
@@ -627,6 +640,8 @@ class AnalysisOptimizationSkill(Skill):
                         )
                     )
         for row in unused.unused:
+            if row.project_id in paused:
+                continue
             annual = float(row.maintenance_cost_monthly * 12)
             impact = round(min(10.0, 2 + annual / 1000), 2)
             items.append(
@@ -800,7 +815,12 @@ class AnalysisOptimizationSkill(Skill):
                 flags.append(f"fiabilité {reliability:.0%}")
                 unreliable.append(name)
             proposed, adopted = int(values["proposed"]), int(values["adopted"])
-            if proposed >= data.min_recommendations and adopted == 0:
+            first = ctx.db.scalar(
+                "SELECT MIN(at) FROM recommendation_log WHERE skill = ? AND status = 'proposed'", (name,)
+            )
+            # Un humain a besoin de temps pour adopter : pas de jugement avant 14 jours de propositions.
+            mature = first is not None and (ctx.clock.now() - parse_dt(first)).days >= 14
+            if proposed >= data.min_recommendations and adopted == 0 and mature:
                 flags.append(f"0 adoption sur {proposed} recommandations")
                 unadopted.append(name)
             audits.append(

@@ -212,3 +212,14 @@ def test_assess_anticipates_exhaustion_risk(kernel):
     kernel.finance.request_expense("300", "saas", recurring="monthly")
     out = kernel.run_skill("finance-budget", "assess")
     assert "finance.exhaustion_probability" in out.metrics
+
+
+@pytest.mark.parametrize("actor", ["mcp", "director", "worker", "cycle", "agent:prospection"])
+def test_agents_cannot_declare_revenue(kernel, actor):
+    from sovereign.core.finance import FinanceError
+
+    with pytest.raises(FinanceError, match="agent IA"):
+        kernel.finance.record_collection("1000", actor=actor)
+    kernel.finance.record_collection("1000", actor="human")
+    kernel.finance.record_refund("100", actor=actor)  # réduire l'assiette reste permis
+    assert kernel.finance.collected_total() == Decimal("900.00")

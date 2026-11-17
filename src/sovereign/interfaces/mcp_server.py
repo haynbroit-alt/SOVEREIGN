@@ -151,22 +151,7 @@ def build_mcp(app: Sovereign) -> MCPServer:
         out = app.kernel.run_skill(skill, action, input or {}, caller="mcp")
         return out.model_dump(mode="json")
 
-    @server.tool(
-        name="record_revenue",
-        annotations=WRITE,
-        description="Enregistrer un encaissement RÉEL (argent reçu). Idempotent sur reference.",
-    )
-    def record_revenue(amount: str, counterparty: str = "", reference: str = "", date: str = "") -> dict[str, Any]:
-        entry = app.kernel.finance.record_collection(
-            amount,
-            date or None,
-            counterparty=counterparty or None,
-            reference=reference or None,
-            source="mcp",
-            actor="mcp",
-        )
-        return entry.model_dump(mode="json")
-
+    # Pas d'outil « record_revenue » : un agent ne déclare jamais d'encaissement (il ouvrirait son propre budget).
     @server.tool(
         name="request_expense",
         annotations=WRITE,
@@ -205,15 +190,17 @@ def build_mcp(app: Sovereign) -> MCPServer:
     @server.tool(
         name="import_csv",
         annotations=WRITE,
-        description="Importer un CSV réel collé tel quel : kind = collections (argent reçu), campaigns, ou un kind "
-        "de données (market, segment, need…). Seuls les encaissements réellement reçus sont comptés.",
+        description="Importer un CSV réel collé tel quel : kind = campaigns ou un kind de données (market, segment, "
+        "need…). Les encaissements (collections) sont réservés aux humains : CLI, API admin, boîte de dépôt.",
     )
     def import_csv_tool(kind: str, csv_text: str, decimal: str = "auto") -> dict[str, Any]:
         from sovereign.importers import import_csv
 
         if decimal not in ("auto", "comma", "dot"):
             raise ValueError("decimal : auto | comma | dot")
-        return import_csv(app, kind, csv_text.encode("utf-8"), decimal=decimal).as_dict()
+        if kind == "collections":
+            raise ValueError("encaissements réservés aux humains (un agent ouvrirait son propre budget)")
+        return import_csv(app, kind, csv_text.encode("utf-8"), decimal=decimal, actor="mcp").as_dict()
 
     @server.tool(
         name="pending_approvals",

@@ -340,3 +340,19 @@ def test_approved_decisions_get_review_date_and_expectation(app, clock):
     decision = app.kernel.memory.get(effects["decision_id"])
     assert decision.review_at is not None and decision.review_at > clock.now()
     assert decision.expected is not None and decision.expected.metric == "finance.pending_review"
+
+
+def test_risk_vetoes_losing_bets_but_not_reversible_positive_tests():
+    from sovereign.brain.council import Council, CouncilFacts
+    from sovereign.skills.base import Recommendation
+
+    test = Recommendation(title="Tester l'offre de Noël", rationale="r", impact=7, effort=1.5, confidence=0.55)
+    cheap = Council().deliberate(test, CouncilFacts(p_loss=0.51, expected_value=2.55))
+    assert not any(v.startswith("RISQUE") for v in cheap.vetoes)  # réversible, espérance positive
+    losing = Council().deliberate(test, CouncilFacts(p_loss=0.6, expected_value=-0.4))
+    assert any(v.startswith("RISQUE : Perte probable") for v in losing.vetoes)
+    one_way = test.model_copy(update={"reversible": False, "confidence": 0.6})
+    assert any(
+        v.startswith("RISQUE")
+        for v in Council().deliberate(one_way, CouncilFacts(p_loss=0.51, expected_value=3)).vetoes
+    )

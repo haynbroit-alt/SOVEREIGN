@@ -151,7 +151,7 @@ def test_verify_change_input_errors(kernel):
         )
 
 
-def test_audit_system_needs_history_then_flags(kernel):
+def test_audit_system_needs_history_then_flags(kernel, clock):
     first = kernel.run_skill(SKILL, "audit_system", {})
     assert not first.sufficient_history and first.never_used_skills == []
     for _ in range(20):
@@ -174,6 +174,9 @@ def test_audit_system_needs_history_then_flags(kernel):
             "INSERT INTO command_runs(command, ok, duration_ms, source, at) VALUES ('/director', 1, 1,"
             " 'cli', '2026-11-17')"
         )
+    young = kernel.run_skill(SKILL, "audit_system", {})
+    assert "finance-budget" not in young.unadopted_skills  # pas de jugement avant 14 jours
+    clock.advance(days=15)
     out = kernel.run_skill(SKILL, "audit_system", {})
     assert out.sufficient_history
     used = {"finance-budget", "memory-learning", SKILL}  # SKILL : le premier audit a été compté

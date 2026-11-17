@@ -39,6 +39,8 @@ sovereign belief add "Le CAC reste < 80 €" --metric marketing.cac --comparator
 sovereign event metric.anomaly --payload '{"z": 5, "metric": "essais"}'
 sovereign cycle daily | weekly | monthly       # cycle immédiat (idempotent par période)
 sovereign tick                                 # planificateur + worker (cron / GitHub Actions)
+sovereign ecosystem scan ~/depots --include ~/autre-depot      # observer des dépôts git (lecture seule)
+sovereign ecosystem assess evaluations.json --analyst "audit"  # joindre des évaluations d'analystes IA/humains
 sovereign serve                                # API + MCP HTTP + planificateur + worker
 sovereign mcp                                  # MCP stdio
 sovereign apikey create admin --scope admin

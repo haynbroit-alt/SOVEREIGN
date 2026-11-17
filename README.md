@@ -10,7 +10,8 @@ priorise, fait délibérer un conseil d'IA (CEO, Risque, CFO, CMO, COO, Mémoire
 l'exécuter, confie les actions sûres à des équipes d'agents, soumet les actions risquées à votre validation,
 mesure les résultats et apprend — en boucle.
 
-**Règles non négociables** : aucun accès bancaire ; dépenses limitées à **10 % des revenus réellement encaissés** ;
+**Règles non négociables** : aucun accès bancaire ; dépenses limitées à **10 % des revenus réellement encaissés**
+(déclarés par un humain ou un webhook Stripe signé, jamais par un agent IA) ;
 validation humaine pour tout risque élevé ; l'IA générative est optionnelle, budgétée et jamais décisionnaire.
 
 ## Démarrage en 1 minute
@@ -28,7 +29,7 @@ uv run sovereign shell                    # puis tapez /budget, /strategy, /coun
 |---|---|---|---|
 | 1 | `business-intelligence` | TAM/SAM/SOM, HHI (seuils DOJ), score d'opportunité d'Ulwick, potentiel par scénarios | `size_market`, `analyze_competition`, `find_unmet_needs`, `detect_opportunities`, `estimate_potential` |
 | 2 | `marketing-strategy` | Attractivité des segments, allocation à rendements décroissants (bornée au budget), CTR/CVR/CPA/ROAS, A/B (test z), tendances | `segment_audiences`, `plan_campaign`, `measure_campaigns`, `analyze_trends`, `design_strategy` |
-| 3 | `business-development` | Économie unitaire (LTV, LTV/CAC, payback, point mort), RICE, matrice d'Ansoff, plans de lancement à jalons | `evaluate_business_model`, `compare_revenue_streams`, `rank_opportunities`, `generate_activities`, `launch_plan` |
+| 3 | `business-development` | Économie unitaire (LTV, LTV/CAC, payback, point mort), RICE, matrice d'Ansoff, plans de lancement à jalons, revue de portefeuille (focus, doublons, tests de marché, échéances) | `evaluate_business_model`, `compare_revenue_streams`, `rank_opportunities`, `generate_activities`, `launch_plan`, `portfolio_review` |
 | 4 | `intelligent-management` | Affectation sous contrainte de capacité, performance (a posteriori bêta), 5 types de conflits, tri topologique | `register_agent`, `assign_missions`, `measure_performance`, `detect_conflicts`, `coordination_report` |
 | 5 | `watch-anticipation` | Termes émergents (z de Poisson), CUSUM, z robuste, carte des risques, versions PyPI/npm, RSS/Atom | `ingest_signals`, `detect_trends`, `detect_market_changes`, `assess_risks`, `check_technologies`, `fetch_feed`, `prepare_decisions` |
 | 6 | `negotiation-strategy` | Somme pondérée + TOPSIS + sensibilité, ZOPA/BATNA, concessions, débat entre IA | `compare_proposals`, `prepare_negotiation`, `pros_cons`, `debate`, `recommend` |
@@ -75,6 +76,11 @@ futures sont refusés ; réimporter un fichier ne double rien. Aussi disponible 
 **Sans ordinateur (GitHub)** : déposez ces fichiers dans `inbox/` sur la branche `sovereign-state` ; le cycle
 suivant les importe (`sovereign data inbox` en local). Détails : [docs/AUTOMATISATION.md](docs/AUTOMATISATION.md).
 
+**Vos dépôts de code** (ex. un compte GitHub cloné) : `sovereign ecosystem scan ~/depots` observe chaque dépôt en
+lecture seule (aucun code exécuté : taille, tests, CI, dépendances, secrets, recouvrements) ;
+`sovereign ecosystem assess evaluations.json` y joint le jugement d'analystes (IA ou humains) ; puis
+`business-development.portfolio_review` décide quoi développer, tester, geler, fusionner ou archiver — et quand.
+
 **Fichier complet** : `sovereign data import mon-entreprise.yaml` — même format que la démo
 (`src/sovereign/data/demo_workspace.yaml`) : marchés, concurrents, besoins, segments, campagnes, modèles
 économiques, agents et missions, signaux, risques, dépendances techniques, projets et KPI, idées, objectifs,
@@ -96,7 +102,7 @@ Variables `SOVEREIGN_*` ou `~/.sovereign/sovereign.toml` : `SOVEREIGN_HOME`, `SO
 ## Qualité
 
 ```bash
-uv run pytest -o addopts="" -q --cov=sovereign    # 268 tests (Python 3.12 à 3.14), couverture ≈ 92 %
+uv run pytest -o addopts="" -q --cov=sovereign    # 287 tests (Python 3.12 à 3.14), couverture ≈ 92 %
 uv run ruff check src tests && uv run mypy
 ```
 

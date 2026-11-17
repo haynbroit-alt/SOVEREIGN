@@ -8,9 +8,12 @@ Conçu pour les fichiers tels qu'ils sortent des outils, sans retouche :
   défaut), « 2026/11/05 ».
 
 Règles :
-- **encaissements** : seul l'argent RÉELLEMENT reçu est importé. Si une colonne de statut existe, seules les lignes
-  payées / réussies comptent ; un montant négatif est un remboursement ; une colonne « Crédit » de relevé est
-  utilisée à défaut de « Montant » (les débits ne sont pas importés : toute dépense passe par le garde-fou).
+- **encaissements** : seul l'argent RÉELLEMENT reçu d'un client est importé. Si une colonne de statut existe (export
+  de paiements), seules les lignes payées / réussies comptent et un montant négatif est un remboursement client.
+  Sans statut (relevé bancaire), un montant négatif est un **débit**, ignoré (toute dépense passe par le garde-fou),
+  sauf libellé de remboursement ; une colonne « Crédit » est utilisée à défaut de « Montant ». Les crédits qui ne
+  sont pas des ventes (prêt, apport, virement interne, remboursement fiscal ou social) sont **exclus** et signalés :
+  ils grossiraient à tort l'enveloppe de 10 %.
   Idempotent : réimporter le même fichier ne double rien (référence stable par ligne).
 - **campagnes** : les lignes d'une même campagne (rapports quotidiens) sont agrégées.
 - **enregistrements** génériques : une ligne = un document du kind demandé.
@@ -118,6 +121,14 @@ ALIASES: dict[str, dict[str, list[str]]] = {
         ],
     },
 }
+NON_REVENUE_RE = re.compile(
+    r"\b(pret|prets|emprunt|deblocage|loan|apport|apports|augmentation de capital|capital social"
+    r"|compte courant d associe|virement interne|vir interne|de compte a compte|entre comptes|transfert interne"
+    r"|internal transfer|own account|remboursement (de )?tva|credit de tva|dgfip|impots?|urssaf|caf)\b"
+)
+"""Crédits qui ne sont pas des revenus commerciaux (texte normalisé, sans accents)."""
+REFUND_RE = re.compile(r"\b(rembours\w*|refund\w*|avoir|chargeback|retrocession|annulation)\b")
+
 SUCCESS_STATUSES = {
     "paid",
     "succeeded",
@@ -289,6 +300,16 @@ def import_collections(
         if amount is None or amount == 0:
             report.skipped.append(f"ligne {index} : montant absent ou nul")
             continue
+        text = norm(" ".join(str(v) for v in row.values() if v))
+        if amount > 0 and NON_REVENUE_RE.search(text):
+            report.skipped.append(
+                f"ligne {index} : crédit non commercial exclu (prêt, apport, virement interne, remboursement fiscal) "
+                "— s'il s'agit d'une vraie vente : sovereign finance revenue"
+            )
+            continue
+        if amount < 0 and "status" not in columns and not REFUND_RE.search(text):
+            report.skipped.append(f"ligne {index} : débit ignoré (les dépenses passent par le garde-fou des 10 %)")
+            continue
         day = parse_date(row.get(columns["date"]), dayfirst)
         if day is None:
             report.skipped.append(f"ligne {index} : date illisible « {row.get(columns['date'])} »")
@@ -334,7 +355,10 @@ def import_collections(
         else:
             report.imported += 1
     if "status" not in columns:
-        report.warnings.append("Aucune colonne de statut : toutes les lignes positives sont considérées encaissées.")
+        report.warnings.append(
+            "Aucune colonne de statut : les crédits sont considérés encaissés (sauf prêts, apports, virements "
+            "internes, remboursements fiscaux) et les débits ignorés."
+        )
     return report
 
 
