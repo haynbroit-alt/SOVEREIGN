@@ -31,6 +31,7 @@ from sovereign.skills.base import (
     Skill,
     SkillContext,
     SkillOutput,
+    TargetMetric,
     action,
 )
 
@@ -748,6 +749,7 @@ class WatchAnticipationSkill(Skill):
                 out.recommendations.append(
                     Recommendation(
                         title=f"Traiter le risque « {assessed_risk.title} »",
+                        expected_metric=TargetMetric(metric="risk.critical_count", direction="decrease"),
                         rationale=assessed_risk.mitigation,
                         impact=min(10.0, assessed_risk.score),
                         effort=4,
@@ -856,6 +858,7 @@ class WatchAnticipationSkill(Skill):
                             f"Mettre à jour {dep_status.name} {dep_status.current_version} "
                             f"→ {dep_status.latest_version}"
                         ),
+                        expected_metric=TargetMetric(metric="tech.outdated", direction="decrease"),
                         rationale=f"Retard {dep_status.lag}"
                         + (" sur une dépendance critique." if dep_status.critical else "."),
                         impact=6 if dep_status.critical else 4,

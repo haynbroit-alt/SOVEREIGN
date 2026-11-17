@@ -26,6 +26,7 @@ from sovereign.skills.base import (
     SkillContext,
     SkillError,
     SkillOutput,
+    TargetMetric,
     action,
 )
 
@@ -377,6 +378,7 @@ class MarketingStrategySkill(Skill):
         out.recommendations.append(
             Recommendation(
                 title=f"Concentrer l'acquisition sur le segment « {icp.name} »",
+                expected_metric=TargetMetric(metric="marketing.cac", direction="decrease"),
                 rationale=(
                     f"Meilleure attractivité ({icp.attractiveness:.2f}"
                     + (f" contre {runner_up:.2f} pour le suivant" if len(results) > 1 else "")
@@ -645,6 +647,9 @@ class MarketingStrategySkill(Skill):
                 out.recommendations.append(
                     Recommendation(
                         title=f"Mettre en pause la campagne « {item.name} »",
+                        expected_metric=TargetMetric(
+                            metric="marketing.roas", direction="increase", relative_change=0.05
+                        ),
                         rationale=f"ROAS {item.roas:.2f} contre une médiane de {reference:.2f} ; "
                         f"{item.spend} dépensés.",
                         impact=clamp(3 + 7 * weight, 0, 10),

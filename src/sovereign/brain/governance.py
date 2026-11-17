@@ -11,7 +11,7 @@ Un refus est aussi mémorisé : refuser est une décision.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Any, Literal
 
@@ -124,6 +124,15 @@ class ApprovalQueue:
         rec = approval.payload.get("recommendation", {})
         effects: dict[str, Any] = {"approval_id": approval_id, "status": status}
         kernel = self.app.kernel
+        from sovereign.brain.director import expectation_for
+        from sovereign.skills.base import Recommendation
+
+        expected = None
+        horizon = 30
+        if approve and rec:
+            parsed = Recommendation.model_validate(rec)
+            expected = expectation_for(kernel, parsed)
+            horizon = parsed.horizon_days or 30
         decision = kernel.memory.record(
             title=approval.title,
             decision=("Approuvé : " if approve else "Refusé : ") + rec.get("title", approval.title),
@@ -134,7 +143,8 @@ class ApprovalQueue:
             skills=[rec["skill"]] if rec.get("skill") else [],
             recommendation_ids=[rec["id"]] if (rec.get("id") and approve) else [],
             confidence=float(rec.get("confidence", 0.5)),
-            review_at=None,
+            expected=expected,
+            review_at=self.clock.now() + timedelta(days=horizon) if approve else None,
             source=f"human:{actor}",
         )
         effects["decision_id"] = decision.id

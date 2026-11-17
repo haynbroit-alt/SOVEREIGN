@@ -21,6 +21,7 @@ from sovereign.skills.base import (
     Skill,
     SkillContext,
     SkillOutput,
+    TargetMetric,
     action,
 )
 
@@ -185,10 +186,12 @@ class MemoryLearningSkill(Skill):
         if rate is not None:
             out.metrics["memory.success_rate"] = rate
         out.metrics["memory.open_decisions"] = float(len(open_))
+        out.metrics["memory.due_reviews"] = float(len(due))
         if due:
             out.recommendations.append(
                 Recommendation(
                     title=f"Mesurer le résultat de {len(due)} décision(s) arrivée(s) à échéance",
+                    expected_metric=TargetMetric(metric="memory.due_reviews", direction="decrease", target=0.0),
                     rationale="Sans mesure, le système ne peut ni apprendre ni réviser ses croyances.",
                     impact=6,
                     effort=1.5,

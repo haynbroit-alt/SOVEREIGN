@@ -24,6 +24,7 @@ from sovereign.skills.base import (
     SkillContext,
     SkillError,
     SkillOutput,
+    TargetMetric,
     action,
 )
 
@@ -443,6 +444,9 @@ class AnalysisOptimizationSkill(Skill):
                 out.recommendations.append(
                     Recommendation(
                         title=f"Redresser « {worst.name} » sur le projet « {project.name} »",
+                        expected_metric=TargetMetric(
+                            metric="projects.health_avg", direction="increase", relative_change=0.05
+                        ),
                         rationale=(
                             f"KPI le plus éloigné de sa cible ({worst.attainment:.0%}) ; "
                             f"il pèse {share:.0%} de la "
@@ -550,6 +554,7 @@ class AnalysisOptimizationSkill(Skill):
             out.recommendations.append(
                 Recommendation(
                     title=f"Retirer ou simplifier « {row.feature} » ({row.project})",
+                    expected_metric=TargetMetric(metric="features.wasted_monthly_cost", direction="decrease"),
                     rationale=row.reason + (f" Économie : {annual} par an." if annual > 0 else ""),
                     impact=round(min(10.0, 2 + float(annual) / 1000), 2),
                     effort=3,
@@ -596,6 +601,9 @@ class AnalysisOptimizationSkill(Skill):
                             confidence=confidence,
                             ease=ease,
                             ice=round(impact * confidence * ease, 3),
+                            expected_metric=TargetMetric(
+                                metric="projects.health_avg", direction="increase", relative_change=0.05
+                            ),
                             rationale=(f"Atteinte {kpi.attainment:.0%} (valeur {kpi.value}, cible {kpi.target})."),
                         )
                     )
@@ -610,6 +618,9 @@ class AnalysisOptimizationSkill(Skill):
                             confidence=0.6,
                             ease=6.0,
                             ice=round(impact * 0.6 * 6.0, 3),
+                            expected_metric=TargetMetric(
+                                metric="projects.health_avg", direction="increase", relative_change=0.05
+                            ),
                             rationale=(
                                 f"Cible atteinte ({kpi.attainment:.0%}) mais pente défavorable ({kpi.trend_slope})."
                             ),
@@ -627,6 +638,7 @@ class AnalysisOptimizationSkill(Skill):
                     confidence=0.7,
                     ease=7.0,
                     ice=round(impact * 0.7 * 7.0, 3),
+                    expected_metric=TargetMetric(metric="features.wasted_monthly_cost", direction="decrease"),
                     rationale=row.reason,
                 )
             )

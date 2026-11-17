@@ -58,6 +58,27 @@ class FollowUp(BaseModel):
     payload: dict[str, Any] = Field(default_factory=dict)
 
 
+class TargetMetric(BaseModel):
+    """Résultat attendu MESURABLE : permet au directeur de juger lui-même la décision à l'échéance.
+
+    La base est la valeur observée au moment de la décision ; la cible est ``target`` si elle améliore la base,
+    sinon une amélioration relative (``relative_change``, 10 % par défaut).
+    """
+
+    metric: str
+    direction: Literal["increase", "decrease"]
+    target: float | None = None
+    relative_change: float = Field(0.1, gt=0, le=1)
+
+    def expectation(self, baseline: float) -> dict[str, Any]:
+        target = self.target
+        better = target is not None and (target > baseline if self.direction == "increase" else target < baseline)
+        if not better:
+            step = abs(baseline) * self.relative_change or self.relative_change
+            target = baseline + step if self.direction == "increase" else baseline - step
+        return {"metric": self.metric, "baseline": baseline, "target": target, "direction": self.direction}
+
+
 class Recommendation(BaseModel):
     id: str = ""
     title: str
@@ -76,6 +97,9 @@ class Recommendation(BaseModel):
     tags: list[str] = Field(default_factory=list)
     evidence: list[str] = Field(default_factory=list)
     follow_up: FollowUp | None = None
+    expected_metric: TargetMetric | None = Field(
+        None, description="Métrique observée qui doit évoluer si la recommandation réussit (mesure automatique)"
+    )
 
     def finalize(self, skill: str) -> Recommendation:
         self.skill = self.skill or skill
