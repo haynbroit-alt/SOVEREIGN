@@ -62,6 +62,13 @@ avec données structurées ; utilisable avec n8n, Zapier, Make, un relais Slack/
    L'état est conservé sur la branche `sovereign-state` ; les rapports sont publiés en artefacts. Les workflows
    planifiés ne s'exécutent que depuis la branche par défaut.
 
+   **Alimenter l'espace hébergé sur GitHub sans ordinateur** : sur la branche `sovereign-state`, déposez vos
+   fichiers dans un dossier `inbox/` (bouton « Add file → Upload files » de l'interface web). Au cycle suivant (ou
+   via « Run workflow »), ils sont importés puis rangés dans `inbox/importes/` ; un fichier illisible va dans
+   `inbox/erreurs/` avec l'explication. Noms des CSV : `<kind>.csv` ou `<kind>--<libellé>.csv`
+   (`collections--banque-novembre.csv`, `campaigns--google.csv`, `segment.csv`) ; YAML/JSON au format d'espace
+   de travail. ⚠ Ces fichiers et la base sont stockés dans le dépôt : utilisez un **dépôt privé**.
+
    **Vérifié en conditions réelles** (2026-11-17, exécution n°1 sur GitHub) : cycles quotidien, hebdomadaire et
    mensuel exécutés, 3 rapports publiés en artefact, état poussé sur `sovereign-state`, durée totale 14 s.
 

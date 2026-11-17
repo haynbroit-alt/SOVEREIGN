@@ -442,3 +442,44 @@ def import_csv(app: Sovereign, kind: str, source: str | Path | bytes, **options:
         report = import_records(app, kind, source, **options)
     app.kernel.events.publish("workspace.csv_imported", report.as_dict(), source="csv")
     return report
+
+
+INBOX_SUFFIXES = (".csv", ".yaml", ".yml", ".json")
+
+
+def process_inbox(app: Sovereign, inbox: str | Path, *, now_label: str | None = None) -> list[dict[str, Any]]:
+    """Importe les fichiers déposés dans une boîte de dépôt puis les range dans ``inbox/importes/``.
+
+    Convention de nommage des CSV : ``<kind>.csv`` ou ``<kind>--<libellé>.csv`` (ex. ``collections--banque.csv``,
+    ``campaigns--google.csv``, ``segment.csv``). Les fichiers YAML/JSON suivent le format d'espace de travail.
+    Un fichier en erreur est déplacé dans ``inbox/erreurs/`` avec un fichier ``.erreur.txt`` explicatif : il n'est
+    jamais réessayé en boucle et rien n'est perdu.
+    """
+
+    from sovereign.workspace import import_workspace, load_file
+
+    folder = Path(inbox)
+    if not folder.is_dir():
+        return []
+    label = now_label or app.kernel.clock.now().strftime("%Y%m%dT%H%M%S")
+    done_dir, error_dir = folder / "importes", folder / "erreurs"
+    results: list[dict[str, Any]] = []
+    for file in sorted(p for p in folder.iterdir() if p.is_file() and p.suffix.lower() in INBOX_SUFFIXES):
+        try:
+            if file.suffix.lower() == ".csv":
+                kind = file.stem.split("--", 1)[0].strip().lower()
+                outcome: dict[str, Any] = import_csv(app, kind, file.read_bytes()).as_dict()
+            else:
+                outcome = {"kind": "workspace", **import_workspace(app, load_file(file), actor=f"inbox:{file.name}")}
+            target = done_dir / f"{label}-{file.name}"
+            status = "importé"
+        except Exception as exc:  # un fichier défectueux ne bloque pas les autres
+            outcome = {"error": f"{type(exc).__name__}: {exc}"}
+            target = error_dir / f"{label}-{file.name}"
+            status = "erreur"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        file.rename(target)
+        if status == "erreur":
+            target.with_suffix(target.suffix + ".erreur.txt").write_text(outcome["error"] + "\n", encoding="utf-8")
+        results.append({"file": file.name, "status": status, "moved_to": str(target.relative_to(folder)), **outcome})
+    return results

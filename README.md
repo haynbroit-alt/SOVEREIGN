@@ -72,6 +72,9 @@ les en-têtes FR/EN courants sont reconnus (« Montant », « Crédit », « Sta
 futures sont refusés ; réimporter un fichier ne double rien. Aussi disponible en API
 (`POST /v1/workspace/import-csv/{kind}`) et en MCP (outil `import_csv`).
 
+**Sans ordinateur (GitHub)** : déposez ces fichiers dans `inbox/` sur la branche `sovereign-state` ; le cycle
+suivant les importe (`sovereign data inbox` en local). Détails : [docs/AUTOMATISATION.md](docs/AUTOMATISATION.md).
+
 **Fichier complet** : `sovereign data import mon-entreprise.yaml` — même format que la démo
 (`src/sovereign/data/demo_workspace.yaml`) : marchés, concurrents, besoins, segments, campagnes, modèles
 économiques, agents et missions, signaux, risques, dépendances techniques, projets et KPI, idées, objectifs,
@@ -93,7 +96,7 @@ Variables `SOVEREIGN_*` ou `~/.sovereign/sovereign.toml` : `SOVEREIGN_HOME`, `SO
 ## Qualité
 
 ```bash
-uv run pytest -o addopts="" -q --cov=sovereign    # 266 tests (Python 3.12 à 3.14), couverture ≈ 92 %
+uv run pytest -o addopts="" -q --cov=sovereign    # 268 tests (Python 3.12 à 3.14), couverture ≈ 92 %
 uv run ruff check src tests && uv run mypy
 ```
 
