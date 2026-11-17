@@ -213,3 +213,134 @@ def test_assess_empty_then_full(kernel):
     assert (full.business_models, full.opportunities, full.assets) == (1, 1, 1)
     assert "bizdev.mrr" in full.metrics and "bizdev.top_opportunity_score" in full.metrics
     assert full.recommendations and all(r.skill == SKILL for r in full.recommendations)
+
+
+# -- Revue de portefeuille ---------------------------------------------------------------------------------
+def _project(
+    pid,
+    *,
+    potential=None,
+    effort=None,
+    confidence=0.6,
+    maturity="prototype",
+    loc=1000,
+    verdict=None,
+    overlaps_with=(),
+    complementary="",
+    secrets=(),
+    tests_failed=0,
+    kpis=None,
+):
+    record = {
+        "id": f"repo-{pid}",
+        "name": pid.title(),
+        "kpis": kpis if kpis is not None else [{"name": "tests", "value": 1, "target": 1}],
+        "repo": {
+            "name": pid,
+            "loc": loc,
+            "secret_findings": list(secrets),
+            "tests_failed": tests_failed,
+            "days_since_last_commit": 3,
+        },
+        "overlaps": [],
+    }
+    if potential is not None:
+        record["assessment"] = {
+            "commercial_potential": potential,
+            "effort_to_mvp_weeks": effort,
+            "confidence": confidence,
+            "maturity": maturity,
+            "verdict": verdict,
+            "verdict_reason": "raison IA",
+            "overlaps_with": list(overlaps_with),
+            "complementary_to_sovereign": complementary,
+        }
+    return record
+
+
+def _seed(kernel, *records):
+    for record in records:
+        kernel.store.put("project", record["id"], record)
+
+
+def test_portfolio_review_rules(kernel):
+    _seed(
+        kernel,
+        _project("paie", potential=5, effort=8, confidence=0.55, maturity="mvp", verdict="develop"),
+        _project("ref", potential=5, effort=6, confidence=0.55, verdict="develop"),
+        _project("bonus", potential=4, effort=10, confidence=0.5, verdict="develop"),
+        _project("tr", potential=3, effort=6, confidence=0.45, verdict="develop"),
+        _project("cortex", potential=1, effort=20, overlaps_with=["tr"], verdict="freeze"),
+        _project(
+            "hive", potential=2, effort=10, overlaps_with=["ref"], complementary="canal Telegram", verdict="merge"
+        ),
+        _project("velyx", potential=3, effort=2, overlaps_with=["ref"], complementary="connecteurs", verdict="freeze"),
+        _project("mondo", potential=3, effort=4, loc=0, maturity="idea", verdict="freeze"),
+        _project("artiste", potential=1, effort=0, loc=0, maturity="idea", verdict="archive"),
+        _project("inconnu"),
+    )
+    out = kernel.run_skill(SKILL, "portfolio_review", {"focus_limit": 2})
+    verdicts = {d.project_id.removeprefix("repo-"): d for d in out.decisions}
+    assert {k: v.verdict for k, v in verdicts.items()} == {
+        "ref": "développer",  # rendement 5×0,775/1,75 = 2,214
+        "paie": "développer",  # 5×0,775/2 = 1,938
+        "bonus": "maintenir",  # potentiel ≥ 4 mais hors limite d'encours
+        "velyx": "valider le marché",  # test de 2 semaines avant toute fusion
+        "inconnu": "évaluer",
+        "hive": "fusionner",  # doublon de ref avec un actif propre
+        "cortex": "geler",  # doublon de tr, sans actif propre
+        "tr": "geler",  # potentiel 3 pour 6 semaines
+        "mondo": "archiver",  # idée sans code, potentiel ≤ 3
+        "artiste": "archiver",
+    }
+    assert out.focus == ["Ref", "Paie"]
+    assert verdicts["ref"].return_on_effort == pytest.approx(2.214, abs=1e-3)
+    assert verdicts["hive"].merge_into == "Ref" and verdicts["velyx"].merge_into == "Ref"
+    # 6 + 20 + 4 + 0 semaines évitées (tr, cortex, mondo, artiste)
+    assert out.freed_weeks == pytest.approx(30.0)
+    # Désaccords avec les analystes signalés, jamais tranchés en faveur de l'IA
+    assert verdicts["tr"].agrees_with_ai is False and verdicts["bonus"].agrees_with_ai is True
+    assert verdicts["velyx"].agrees_with_ai is True  # « freeze » couvre la validation sans développement
+    assert any(d.startswith("Tr :") for d in out.divergences)
+    assert verdicts["inconnu"].ai_verdict is None and verdicts["inconnu"].agrees_with_ai is None
+    assert out.metrics["portfolio.focus"] == 2
+    titles = [r.title for r in out.recommendations]
+    assert any(t.startswith("Concentrer l'effort sur « Ref » et « Paie »") for t in titles)
+    assert any("Fusionner « Hive » dans « Ref »" in t for t in titles)
+    assert any("Tester le marché de « Velyx »" in t for t in titles)
+
+
+def test_portfolio_review_blocking_dispersion_and_apply(kernel):
+    _seed(
+        kernel,
+        _project("fuite", potential=6, effort=4, secrets=["config.py:3 clé"]),
+        _project("rouge", potential=5, effort=4, tests_failed=2),
+        _project("b", potential=2, effort=8),
+    )
+    out = kernel.run_skill(SKILL, "portfolio_review", {"focus_limit": 1, "apply": True})
+    fuite = next(d for d in out.decisions if d.name == "Fuite")
+    assert fuite.verdict == "développer" and fuite.blocking == ["secrets exposés (1)"]
+    security = [r for r in out.recommendations if r.title.startswith("Corriger « Fuite »")]
+    assert security and security[0].urgency == 10
+    assert any(i.metric == "portfolio.active_projects" for i in out.insights)  # 3 actifs pour 1 prioritaire
+    assert kernel.store.get("project", "repo-b")["portfolio_status"] == "geler"
+    # analysis-optimization ne propose plus d'amélioration pour un projet gelé
+    kernel.store.put(
+        "project",
+        "repo-b",
+        {**kernel.store.get("project", "repo-b"), "kpis": [{"name": "doc", "value": 1, "target": 10}]},
+    )
+    backlog = kernel.run_skill("analysis-optimization", "recommend_improvements", {})
+    assert all(item.project != "B" for item in backlog.backlog)
+    projects = kernel.run_skill("analysis-optimization", "analyze_projects", {})
+    assert not any("« B »" in r.title for r in projects.recommendations)
+    assert "gelé(s), archivé(s) ou à fusionner" in projects.summary
+
+
+def test_portfolio_review_empty_and_assess(kernel):
+    empty = kernel.run_skill(SKILL, "portfolio_review", {})
+    assert empty.decisions == [] and "Aucun projet" in empty.summary
+    _seed(kernel, _project("a", potential=5, effort=4), _project("b"))
+    assessed = kernel.run_skill(SKILL, "assess", {})
+    assert assessed.projects == 2 and "Focus : A." in assessed.summary
+    assert kernel.store.get("project", "repo-a").get("portfolio_status") is None  # assess ne modifie rien

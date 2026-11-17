@@ -69,6 +69,12 @@ avec données structurées ; utilisable avec n8n, Zapier, Make, un relais Slack/
    (`collections--banque-novembre.csv`, `campaigns--google.csv`, `segment.csv`) ; YAML/JSON au format d'espace
    de travail. ⚠ Ces fichiers et la base sont stockés dans le dépôt : utilisez un **dépôt privé**.
 
+   **Garde-fou de confidentialité** : avant tout cycle, le workflow lit la visibilité du dépôt (API GitHub). Sur un
+   dépôt **public** (ou si la visibilité ne peut pas être lue), il n'exécute rien, ne publie ni état, ni import, ni
+   rapport, et l'indique par un avertissement dans l'exécution. Pour un dépôt de démonstration volontairement
+   public, définissez la variable de dépôt `SOVEREIGN_ALLOW_PUBLIC_STATE=true` (Settings → Secrets and variables
+   → Actions → Variables).
+
    **Vérifié en conditions réelles** (2026-11-17, exécution n°1 sur GitHub) : cycles quotidien, hebdomadaire et
    mensuel exécutés, 3 rapports publiés en artefact, état poussé sur `sovereign-state`, durée totale 14 s.
 

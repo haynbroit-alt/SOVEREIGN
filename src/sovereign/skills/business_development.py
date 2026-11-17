@@ -26,6 +26,7 @@ from sovereign.skills.base import (
     SkillContext,
     SkillError,
     SkillOutput,
+    TargetMetric,
     action,
 )
 
@@ -248,6 +249,7 @@ class AssessOutput(SkillOutput):
     business_models: int
     opportunities: int
     assets: int
+    projects: int = 0
 
 
 def _merge(target: SkillOutput, part: SkillOutput) -> None:
@@ -304,13 +306,16 @@ class BusinessDevelopmentSkill(Skill):
         models = self._models(ctx, [])
         opportunities = self._opportunities(ctx, [])
         assets = self._assets(ctx, [])
-        out = AssessOutput(business_models=len(models), opportunities=len(opportunities), assets=len(assets))
-        if not (models or opportunities or assets):
+        projects = ctx.store.count("project")
+        out = AssessOutput(
+            business_models=len(models), opportunities=len(opportunities), assets=len(assets), projects=projects
+        )
+        if not (models or opportunities or assets or projects >= 2):
             out.summary = (
                 "Aucune donnée de développement : importez des « business_model » (flux de revenus, "
                 "coûts fixes, CAC), des « opportunity » (ou lancez "
-                "business-intelligence.detect_opportunities) et des « asset » "
-                "(produits, compétences, technologies) pour activer l'analyse."
+                "business-intelligence.detect_opportunities), des « asset » "
+                "(produits, compétences, technologies) ou au moins deux « project » pour activer l'analyse."
             )
             return out
         parts: list[str] = []
@@ -326,6 +331,10 @@ class BusinessDevelopmentSkill(Skill):
             activities = self.generate_activities(ctx, ActivitiesInput(assets=assets, per_quadrant=2))
             out.insights.extend(activities.insights)
             parts.append(activities.summary)
+        if projects >= 2:
+            review = self.portfolio_review(ctx, PortfolioInput())
+            _merge(out, review)
+            parts.append(review.summary)
         out.summary = " ".join(parts)
         return out
 
@@ -736,6 +745,150 @@ class BusinessDevelopmentSkill(Skill):
             )
         return out
 
+    @action(
+        "Revue de portefeuille : développer, valider le marché, maintenir, fusionner, geler, archiver", risk="write"
+    )
+    def portfolio_review(self, ctx: SkillContext, data: PortfolioInput) -> PortfolioOutput:
+        raw = ctx.store.list("project")
+        if not raw:
+            return PortfolioOutput(
+                decisions=[],
+                focus=[],
+                freed_weeks=0.0,
+                divergences=[],
+                summary="Aucun projet : lancez « sovereign ecosystem scan » ou importez des projets.",
+            )
+        out = review_portfolio(raw, data.focus_limit)
+        counts: dict[str, int] = {}
+        for decision in out.decisions:
+            counts[decision.verdict] = counts.get(decision.verdict, 0) + 1
+        active = sum(
+            1 for r in raw if isinstance(r.get("repo"), dict) and (r["repo"].get("days_since_last_commit") or 999) <= 14
+        )
+        out.summary = (
+            f"{len(out.decisions)} projet(s) : "
+            + ", ".join(f"{n} {v}" for v, n in counts.items())
+            + (f". Focus : {', '.join(out.focus)}." if out.focus else ".")
+            + f" Effort évité : {out.freed_weeks:g} semaines."
+            + (f" {len(out.divergences)} divergence(s) avec les analystes IA." if out.divergences else "")
+        )
+        out.metrics = {
+            "portfolio.projects": float(len(out.decisions)),
+            "portfolio.active_projects": float(active),
+            "portfolio.focus": float(len(out.focus)),
+            "portfolio.freed_weeks": out.freed_weeks,
+            "portfolio.divergences": float(len(out.divergences)),
+        }
+        if active > data.focus_limit:
+            out.insights.append(
+                Insight(
+                    kind="weakness",
+                    severity="warning",
+                    metric="portfolio.active_projects",
+                    value=float(active),
+                    title=f"Dispersion : {active} projets actifs sur 14 jours pour {data.focus_limit} prioritaires",
+                    detail="Chaque projet actif hors focus retarde le premier revenu des projets prioritaires.",
+                )
+            )
+        if out.focus:
+            out.recommendations.append(
+                Recommendation(
+                    title="Concentrer l'effort sur " + " et ".join(f"« {n} »" for n in out.focus),
+                    rationale="Meilleurs rendements de l'effort du portefeuille ; tout le reste attend.",
+                    impact=8,
+                    effort=2,
+                    confidence=round(
+                        sum(d.commercial_potential or 0 for d in out.decisions if d.verdict == "développer")
+                        / 10
+                        / max(1, len(out.focus))
+                        + 0.3,
+                        3,
+                    )
+                    if out.focus
+                    else 0.5,
+                    urgency=7,
+                    risk=0.1,
+                    tags=["portefeuille", "stratégie"],
+                    evidence=[f"{d.name} : {', '.join(d.reasons)}" for d in out.decisions if d.verdict == "développer"],
+                    expected_metric=TargetMetric(
+                        metric="portfolio.active_projects", direction="decrease", target=float(data.focus_limit)
+                    ),
+                )
+            )
+        stopped = [d for d in out.decisions if d.verdict in ("geler", "archiver")]
+        if stopped:
+            out.recommendations.append(
+                Recommendation(
+                    title=f"Geler ou archiver {len(stopped)} projet(s) : " + ", ".join(d.name for d in stopped[:6]),
+                    rationale=f"Doublons ou potentiel insuffisant ; libère {out.freed_weeks:g} semaines d'effort.",
+                    impact=6,
+                    effort=1,
+                    confidence=0.7,
+                    urgency=6,
+                    risk=0.1,
+                    tags=["portefeuille", "focus"],
+                    evidence=[f"{d.name} : {d.reasons[0]}" for d in stopped[:8]],
+                )
+            )
+        for d in (d for d in out.decisions if d.verdict == "fusionner"):
+            out.recommendations.append(
+                Recommendation(
+                    title=f"Fusionner « {d.name} » dans « {d.merge_into} »",
+                    rationale="; ".join(d.reasons),
+                    impact=5,
+                    effort=4,
+                    confidence=0.6,
+                    urgency=4,
+                    risk=0.2,
+                    tags=["portefeuille", "fusion"],
+                )
+            )
+        for d in (d for d in out.decisions if d.verdict == "valider le marché"):
+            out.recommendations.append(
+                Recommendation(
+                    title=f"Tester le marché de « {d.name} » avant tout développement",
+                    rationale=d.next_action,
+                    impact=7,
+                    effort=1.5,
+                    confidence=0.6,
+                    urgency=7,
+                    risk=0.15,
+                    external=True,
+                    tags=["portefeuille", "ventes"],
+                    evidence=d.reasons,
+                )
+            )
+        for d in (d for d in out.decisions if d.blocking):
+            critical = any("secrets" in b for b in d.blocking)
+            out.recommendations.append(
+                Recommendation(
+                    title=f"Corriger « {d.name} » : {', '.join(d.blocking)}",
+                    rationale="Bloquant avant toute mise en avant.",
+                    impact=9 if critical else 5,
+                    effort=2,
+                    confidence=0.9,
+                    urgency=10 if critical else 6,
+                    risk=0.05,
+                    tags=["sécurité" if critical else "qualité", "portefeuille"],
+                )
+            )
+        if out.divergences:
+            out.insights.append(
+                Insight(
+                    kind="contradiction",
+                    severity="warning",
+                    title=f"{len(out.divergences)} désaccord(s) SOVEREIGN / analystes IA",
+                    detail=" | ".join(out.divergences[:4]),
+                )
+            )
+        if data.apply:
+            for decision in out.decisions:
+                record = ctx.store.get("project", decision.project_id)
+                if record is not None:
+                    record.update(portfolio_status=decision.verdict, portfolio_reason="; ".join(decision.reasons))
+                    ctx.store.put("project", decision.project_id, record)
+        return out
+
     @action("Préparer un plan de lancement par phases (jalons, go/no-go, budget borné par le disponible)")
     def launch_plan(self, ctx: SkillContext, data: LaunchInput) -> LaunchOutput:
         available = to_decimal(max(Decimal("0"), ctx.finance.available()))
@@ -858,6 +1011,255 @@ class BusinessDevelopmentSkill(Skill):
                 )
             )
         return out
+
+
+# -- Revue de portefeuille ---------------------------------------------------------------------------------
+PortfolioVerdict = Literal["développer", "valider le marché", "maintenir", "fusionner", "geler", "archiver", "évaluer"]
+_MATURITY = {"idea": 0, "prototype": 1, "mvp": 2, "product": 3}
+_AI_FAMILY = {
+    "develop": {"développer", "maintenir"},
+    "merge": {"fusionner"},
+    "freeze": {"geler", "valider le marché", "maintenir"},
+    "archive": {"archiver", "geler"},
+}
+
+
+class PortfolioInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    focus_limit: int = Field(2, ge=1, le=10, description="Nombre de projets développés en parallèle (encours)")
+    apply: bool = Field(False, description="Enregistrer le statut décidé dans chaque projet")
+
+
+class PortfolioDecision(BaseModel):
+    project_id: str
+    name: str
+    verdict: PortfolioVerdict
+    reasons: list[str]
+    next_action: str
+    commercial_potential: float | None
+    effort_weeks: float | None
+    return_on_effort: float | None
+    health: float | None
+    blocking: list[str]
+    merge_into: str | None = None
+    ai_verdict: str | None = None
+    agrees_with_ai: bool | None = None
+
+
+class PortfolioOutput(SkillOutput):
+    decisions: list[PortfolioDecision]
+    focus: list[str]
+    freed_weeks: float
+    divergences: list[str]
+
+
+def _health(kpis: list[dict[str, object]]) -> float | None:
+    total = weight_sum = 0.0
+    for kpi in kpis:
+        try:
+            value, target = float(kpi["value"]), float(kpi["target"])  # type: ignore[arg-type]
+        except (KeyError, TypeError, ValueError):
+            continue
+        weight = float(kpi.get("weight", 1) or 1)  # type: ignore[arg-type]
+        if kpi.get("direction") == "lower":
+            attained = target / value if value > 0 else 1.0
+        else:
+            attained = value / target if target > 0 else 1.0
+        total += weight * clamp(attained, 0.0, 1.0)
+        weight_sum += weight
+    return round(total / weight_sum, 3) if weight_sum else None
+
+
+class _Project:
+    def __init__(self, raw: dict[str, object]) -> None:
+        self.raw = raw
+        self.id = str(raw["id"])
+        self.name = str(raw.get("name") or raw["id"])
+        repo = raw.get("repo") if isinstance(raw.get("repo"), dict) else {}
+        self.repo: dict[str, object] = repo  # type: ignore[assignment]
+        self.repo_name = str(self.repo.get("name") or self.id.removeprefix("repo-"))
+        assessment = raw.get("assessment") if isinstance(raw.get("assessment"), dict) else {}
+        self.assessment: dict[str, object] = assessment  # type: ignore[assignment]
+        potential = self.assessment.get("commercial_potential")
+        self.potential = float(potential) if potential is not None else None  # type: ignore[arg-type]
+        effort = self.assessment.get("effort_to_mvp_weeks")
+        self.effort = float(effort) if effort is not None else None  # type: ignore[arg-type]
+        self.confidence = float(self.assessment.get("confidence", 0.5) or 0.5)  # type: ignore[arg-type]
+        self.maturity = _MATURITY.get(str(self.assessment.get("maturity", "")), 1)
+        self.health = _health(raw.get("kpis") or [])  # type: ignore[arg-type]
+        self.loc = int(self.repo.get("loc", 0) or 0)  # type: ignore[call-overload]
+        self.secrets = list(self.repo.get("secret_findings") or [])  # type: ignore[call-overload]
+        self.tests_failed = int(self.repo.get("tests_failed") or 0)  # type: ignore[call-overload]
+        days = self.repo.get("days_since_last_commit")
+        self.inactive_days = int(days) if days is not None else None  # type: ignore[call-overload]
+        self.complementary = str(
+            self.assessment.get("complementary_to_sovereign") or self.assessment.get("complementary") or ""
+        ).strip()
+
+    def rank_key(self) -> tuple[float, int, float, int]:
+        return (self.potential if self.potential is not None else -1.0, self.maturity, self.health or 0.0, self.loc)
+
+    def return_on_effort(self) -> float | None:
+        if self.potential is None:
+            return None
+        effort = self.effort if self.effort is not None else 8.0
+        return round(self.potential * (0.5 + self.confidence / 2) / (1 + effort / 8), 3)
+
+
+def _strong_links(projects: list[_Project]) -> dict[str, set[str]]:
+    """Recouvrements FORTS : paquet partagé / similarité ≥ 0,5, ou recouvrement constaté par un analyste."""
+
+    by_repo = {p.repo_name.lower(): p for p in projects} | {p.name.lower(): p for p in projects}
+    links: dict[str, set[str]] = {p.id: set() for p in projects}
+    for project in projects:
+        for item in project.raw.get("overlaps") or []:  # type: ignore[attr-defined]
+            other = by_repo.get(str(item.get("repo", "")).lower())
+            if other and float(item.get("score", 0)) >= 0.5:
+                links[project.id].add(other.id)
+                links[other.id].add(project.id)
+        for name in project.assessment.get("overlaps_with") or []:  # type: ignore[attr-defined]
+            other = by_repo.get(str(name).lower().split("/")[-1])
+            if other and other.id != project.id:
+                links[project.id].add(other.id)
+                links[other.id].add(project.id)
+    return links
+
+
+def review_portfolio(raw_projects: list[dict[str, object]], focus_limit: int) -> PortfolioOutput:
+    projects = [_Project(r) for r in raw_projects]
+    by_id = {p.id: p for p in projects}
+    links = _strong_links(projects)
+    decisions: dict[str, PortfolioDecision] = {}
+
+    def decide(
+        p: _Project, verdict: PortfolioVerdict, reasons: list[str], action: str, merge_into: str | None = None
+    ) -> None:
+        blocking = [f"secrets exposés ({len(p.secrets)})"] if p.secrets else []
+        if p.tests_failed:
+            blocking.append(f"{p.tests_failed} test(s) en échec")
+        decisions[p.id] = PortfolioDecision(
+            project_id=p.id,
+            name=p.name,
+            verdict=verdict,
+            reasons=reasons,
+            next_action=action,
+            commercial_potential=p.potential,
+            effort_weeks=p.effort,
+            return_on_effort=p.return_on_effort(),
+            health=p.health,
+            blocking=blocking,
+            merge_into=merge_into,
+        )
+
+    def best_peer(p: _Project) -> _Project | None:
+        better = [by_id[i] for i in links[p.id] if by_id[i].rank_key() > p.rank_key()]
+        return max(better, key=lambda q: q.rank_key()) if better else None
+
+    # 1. Test de marché bon marché d'abord : l'information vaut plus que le code (doublon ou non).
+    for p in projects:
+        if p.potential is not None and p.potential >= 3 and p.effort is not None and p.effort <= 3 and p.loc >= 50:
+            best = best_peer(p)
+            reasons = [f"potentiel {p.potential:g}/10, test bon marché ({p.effort:g} sem.)"]
+            if best is not None:
+                reasons.append(f"recouvre « {best.name} » : décider de la fusion après le test")
+            decide(
+                p,
+                "valider le marché",
+                reasons,
+                "Aucun développement : vendre ou faire tester l'existant, décider sur la réponse du marché.",
+                merge_into=best.name if best is not None else None,
+            )
+    # 2. Doublons : dans chaque recouvrement fort, seul le projet le plus prometteur reste candidat.
+    for p in projects:
+        best = best_peer(p) if p.id not in decisions else None
+        if best is None:
+            continue
+        if p.complementary and p.loc >= 200:
+            decide(
+                p,
+                "fusionner",
+                [f"recouvre « {best.name} », plus prometteur", f"actif propre à récupérer : {p.complementary}"],
+                f"Porter « {p.complementary} » dans « {best.name} », puis archiver.",
+                merge_into=best.name,
+            )
+        else:
+            decide(
+                p,
+                "geler",
+                [f"recouvre « {best.name} », plus prometteur ou plus abouti"],
+                f"Geler ; réutiliser au besoin depuis « {best.name} ».",
+                merge_into=best.name,
+            )
+    # 3. Les autres selon le potentiel, l'effort et la limite d'encours.
+    remaining = [p for p in projects if p.id not in decisions]
+    for p in remaining:
+        if p.potential is None:
+            verdict: PortfolioVerdict = "évaluer"
+            why = ["aucune évaluation commerciale"] + (["pas de code"] if p.loc < 50 else [])
+            decide(p, verdict, why, "Évaluer le potentiel commercial (acheteur, prix, concurrents) avant d'investir.")
+        elif p.loc < 50 and p.potential <= 3:
+            decide(p, "archiver", ["idée sans code ni potentiel démontré"], "Archiver ; noter l'idée en mémoire.")
+    candidates = sorted(
+        (p for p in remaining if p.id not in decisions and p.potential is not None and p.potential >= 4),
+        key=lambda p: -(p.return_on_effort() or 0),
+    )
+    for index, p in enumerate(candidates):
+        roe = p.return_on_effort()
+        if index < focus_limit:
+            decide(
+                p,
+                "développer",
+                [
+                    f"potentiel {p.potential:g}/10, rendement de l'effort {roe}",
+                    f"dans les {focus_limit} meilleurs paris du portefeuille",
+                ],
+                "Livrer le MVP vendable et obtenir un premier client payant.",
+            )
+        else:
+            decide(
+                p,
+                "maintenir",
+                [f"potentiel {p.potential:g}/10 mais hors limite d'encours ({focus_limit})"],
+                "Ne rien développer ; reprendre quand un projet prioritaire est livré ou abandonné.",
+            )
+    for p in remaining:
+        if p.id in decisions or p.potential is None:
+            continue
+        if p.potential <= 1.5:
+            decide(p, "archiver", [f"potentiel {p.potential:g}/10"], "Archiver ; capitaliser les leçons.")
+        else:
+            decide(
+                p,
+                "geler",
+                [f"potentiel {p.potential:g}/10 pour {p.effort or '?'} sem. d'effort"],
+                "Geler en l'état ; ne plus y consacrer de temps sans signal de marché.",
+            )
+    # 4. Confrontation avec l'avis des analystes IA.
+    divergences: list[str] = []
+    for p in projects:
+        decision = decisions[p.id]
+        ai = str(p.assessment.get("verdict") or "") or None
+        decision.ai_verdict = ai
+        if ai in _AI_FAMILY:
+            decision.agrees_with_ai = decision.verdict in _AI_FAMILY[ai]
+            if not decision.agrees_with_ai:
+                divergences.append(
+                    f"{p.name} : SOVEREIGN « {decision.verdict} », analyste IA « {ai} »"
+                    f" ({p.assessment.get('verdict_reason', '')})"
+                )
+    ordered = sorted(
+        decisions.values(),
+        key=lambda d: (
+            ["développer", "valider le marché", "maintenir", "évaluer", "fusionner", "geler", "archiver"].index(
+                d.verdict
+            ),
+            -(d.return_on_effort or 0),
+        ),
+    )
+    focus = [d.name for d in ordered if d.verdict == "développer"]
+    freed = sum(d.effort_weeks or 0 for d in ordered if d.verdict in ("geler", "archiver"))
+    return PortfolioOutput(decisions=ordered, focus=focus, freed_weeks=round(freed, 1), divergences=divergences)
 
 
 SKILL = BusinessDevelopmentSkill

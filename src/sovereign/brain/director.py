@@ -119,6 +119,17 @@ class Director:
             mission, events=events, available_data=available, priors=self.kernel.skill_priors(), limit=limit
         )
         chosen = [{"name": p.name, "score": p.score, "reasons": p.reasons} for p in picks]
+        targeted = any(r.startswith(("mots-clés", "événement")) for p in picks for r in p.reasons)
+        if chosen and not targeted:
+            # Mission générale (aucun mot-clé ni événement) : la vue d'ensemble (finances, mémoire) d'abord,
+            # puis les Skills qui ont le plus de données à analyser.
+            general = [
+                {"name": n, "score": None, "reasons": ["vue d'ensemble (aucun mot-clé spécifique)"]}
+                for n in DEFAULT_SITUATION
+                if n in registry.manifests
+            ]
+            data_picks = [c for c in chosen if c["name"] not in DEFAULT_SITUATION]
+            return (general + data_picks)[: limit + 1]
         if not chosen:
             ranked = sorted(
                 (m for m in registry.manifests.values() if available.intersection(m.data)),

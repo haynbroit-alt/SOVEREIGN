@@ -7,6 +7,8 @@
 #
 # L'état (base SQLite + rapports) est persisté sur la branche `sovereign-state`, jamais sur main.
 # Les workflows planifiés ne s'exécutent que depuis la branche par défaut (après fusion).
+# Confidentialité : sur un dépôt PUBLIC, rien n'est exécuté ni publié (état, boîte de dépôt, rapports), sauf
+# variable de dépôt SOVEREIGN_ALLOW_PUBLIC_STATE=true posée en connaissance de cause.
 name: SOVEREIGN — cycles proactifs
 
 on:
@@ -34,7 +36,28 @@ env:
   SOVEREIGN_NOTIFY_WEBHOOK_SECRET: ${{ secrets.SOVEREIGN_NOTIFY_WEBHOOK_SECRET }}
 
 jobs:
+  guard:
+    runs-on: ubuntu-latest
+    outputs:
+      allowed: ${{ steps.visibility.outputs.allowed }}
+    steps:
+      - name: Confidentialité (aucune donnée d'entreprise sur un dépôt public)
+        id: visibility
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ALLOW_PUBLIC: ${{ vars.SOVEREIGN_ALLOW_PUBLIC_STATE }}
+        run: |
+          private=$(gh api "repos/$GITHUB_REPOSITORY" --jq .private || echo "inconnu")
+          if [ "$private" = "true" ] || [ "$ALLOW_PUBLIC" = "true" ]; then
+            echo "allowed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "allowed=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=Dépôt public (ou visibilité inconnue)::Aucun cycle exécuté : l'état, la boîte de dépôt et les rapports seraient lisibles par tous. Rendez le dépôt privé, ou définissez la variable SOVEREIGN_ALLOW_PUBLIC_STATE=true en connaissance de cause."
+          fi
+
   cycle:
+    needs: guard
+    if: needs.guard.outputs.allowed == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

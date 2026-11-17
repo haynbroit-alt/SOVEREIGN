@@ -611,6 +611,58 @@ def mcp(home: HomeOpt = None) -> None:
         app.close()
 
 
+eco_cli = typer.Typer(help="Écosystème de dépôts de code (ex. comptes GitHub).", no_args_is_help=True)
+cli.add_typer(eco_cli, name="ecosystem")
+
+
+@eco_cli.command("scan")
+def ecosystem_scan(
+    root: Annotated[Path, typer.Argument(help="Dossier contenant les dépôts clonés")],
+    include: Annotated[list[Path] | None, typer.Option("--include", help="Dépôt supplémentaire")] = None,
+    exclude: Annotated[list[str] | None, typer.Option("--exclude", help="Dépôt à ignorer")] = None,
+    tests: Annotated[Path | None, typer.Option(help="JSON {dépôt: {passed, failed}} (CI ou audit)")] = None,
+    home: HomeOpt = None,
+) -> None:
+    """Observer chaque dépôt (lecture seule, aucun code exécuté) et l'enregistrer pour les Skills."""
+
+    from sovereign.ecosystem import load_test_results, scan_ecosystem
+
+    app = _app(home)
+    try:
+        result = scan_ecosystem(
+            app,
+            root,
+            tests=load_test_results(tests) if tests else None,
+            exclude=tuple(exclude or ()),
+            include=tuple(include or ()),
+        )
+        app.worker.run_once()
+        _print(result, True)
+    finally:
+        app.close()
+
+
+@eco_cli.command("assess")
+def ecosystem_assess(
+    files: Annotated[list[Path], typer.Argument(help="JSON : liste d'évaluations {repo, commercial_potential, …}")],
+    analyst: Annotated[str, typer.Option(help="Auteur des évaluations")] = "ia",
+    home: HomeOpt = None,
+) -> None:
+    """Joindre des évaluations d'analystes (IA ou humains) aux dépôts observés, sans écraser les faits."""
+
+    from sovereign.ecosystem import apply_assessments
+
+    app = _app(home)
+    try:
+        items: list[dict[str, Any]] = []
+        for file in files:
+            data = json.loads(file.read_text(encoding="utf-8"))
+            items.extend(data if isinstance(data, list) else [data])
+        _print(apply_assessments(app, items, analyst=analyst), True)
+    finally:
+        app.close()
+
+
 key_cli = typer.Typer(help="Clés d'API à portées (read, write, admin, webhook).", no_args_is_help=True)
 cli.add_typer(key_cli, name="apikey")
 
