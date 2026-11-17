@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  qualite:
+    name: Lint, types et tests (Python ${{ matrix.python }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          python-version: ${{ matrix.python }}
+          enable-cache: true
+      - name: Dépendances (verrouillées)
+        run: uv sync --all-extras --locked
+      - name: Ruff (lint)
+        run: uv run ruff check src tests
+      - name: Ruff (format)
+        run: uv run ruff format --check src tests
+      - name: Mypy
+        run: uv run mypy
+      - name: Tests et couverture
+        run: uv run pytest -o addopts="" -q --cov=sovereign --cov-report=term --cov-fail-under=85
+      - name: Démonstration de bout en bout (CLI réelle)
+        env:
+          SOVEREIGN_HOME: ${{ runner.temp }}/sovereign-demo
+        run: |
+          uv run sovereign init --demo
+          uv run sovereign director "Que dois-je décider cette semaine ?" --deep --dry-run
+          uv run sovereign tick
+          uv run sovereign status

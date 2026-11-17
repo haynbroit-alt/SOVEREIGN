@@ -1,0 +1,92 @@
+# Automatisations proactives de SOVEREIGN sur GitHub Actions (sans serveur à héberger).
+#
+# - schedule           : une fois par jour ; le planificateur (`sovereign tick`) décide lui-même si les cycles
+#                        quotidien, hebdomadaire et mensuel sont dus (idempotents par période). Aucun appel IA.
+# - workflow_dispatch  : lancer une commande à la main (ex. « /report weekly »).
+# - repository_dispatch: réagir à un événement externe (type « sovereign-event », payload {type, payload}).
+#
+# L'état (base SQLite + rapports) est persisté sur la branche `sovereign-state`, jamais sur main.
+# Les workflows planifiés ne s'exécutent que depuis la branche par défaut (après fusion).
+name: SOVEREIGN — cycles proactifs
+
+on:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+    inputs:
+      command:
+        description: "Commande facultative (ex. /report weekly ou une question au directeur)"
+        required: false
+        default: ""
+  repository_dispatch:
+    types: [sovereign-event]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sovereign-state
+  cancel-in-progress: false
+
+env:
+  SOVEREIGN_HOME: ${{ github.workspace }}/.sovereign-state
+  SOVEREIGN_NOTIFY_WEBHOOK_URL: ${{ secrets.SOVEREIGN_NOTIFY_WEBHOOK_URL }}
+  SOVEREIGN_NOTIFY_WEBHOOK_SECRET: ${{ secrets.SOVEREIGN_NOTIFY_WEBHOOK_SECRET }}
+
+jobs:
+  cycle:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: true
+      - name: Dépendances
+        run: uv sync --locked
+
+      - name: Restaurer l'état (branche sovereign-state)
+        run: |
+          if git fetch --depth=1 origin sovereign-state:sovereign-state 2>/dev/null; then
+            git worktree add "$SOVEREIGN_HOME" sovereign-state
+          else
+            git worktree add --orphan -b sovereign-state "$SOVEREIGN_HOME"
+          fi
+
+      - name: Exécuter
+        env:
+          EVENT_TYPE: ${{ github.event.client_payload.type }}
+          EVENT_PAYLOAD: ${{ toJson(github.event.client_payload.payload) }}
+          COMMAND: ${{ inputs.command }}
+        run: |
+          case "$GITHUB_EVENT_NAME" in
+            repository_dispatch)
+              uv run sovereign event "$EVENT_TYPE" --payload "$EVENT_PAYLOAD"
+              ;;
+            workflow_dispatch)
+              if [ -n "$COMMAND" ]; then
+                uv run sovereign ask "$COMMAND" | tee "$SOVEREIGN_HOME/derniere-commande.txt"
+              fi
+              ;;
+          esac
+          uv run sovereign tick
+          uv run sovereign status | tee "$SOVEREIGN_HOME/status.txt"
+
+      - name: Publier les rapports
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sovereign-rapports-${{ github.run_id }}
+          path: ${{ env.SOVEREIGN_HOME }}/reports
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Sauvegarder l'état
+        working-directory: ${{ env.SOVEREIGN_HOME }}
+        run: |
+          git add -f -A .
+          if git diff --cached --quiet; then
+            echo "Aucun changement d'état."
+            exit 0
+          fi
+          git -c user.name="sovereign-bot" -c user.email="sovereign-bot@users.noreply.github.com" \
+            commit -q -m "État SOVEREIGN — $(date -u +%Y-%m-%dT%H:%MZ) ($GITHUB_EVENT_NAME)"
+          git push origin sovereign-state
