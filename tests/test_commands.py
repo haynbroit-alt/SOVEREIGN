@@ -35,6 +35,7 @@ def app(clock):
 def test_the_fifteen_commands_exist():
     app = Sovereign.ephemeral()
     assert sorted(app.commands.specs) == sorted(ALL)
+    app.close()
 
 
 def test_parsing():

@@ -8,6 +8,7 @@ from types import SimpleNamespace
 import pytest
 from pydantic import ValidationError
 
+from sovereign.config import Settings
 from sovereign.kernel import Kernel
 from sovereign.skills.base import SkillError
 
@@ -104,9 +105,7 @@ def test_scamper_optional_llm_enrichment_is_budgeted(clock):
         content=[SimpleNamespace(type="text", text=json.dumps(payload))],
     )
     client = SimpleNamespace(beta=SimpleNamespace(messages=SimpleNamespace(create=lambda **kw: response)))
-    settings = Kernel.ephemeral().settings.model_copy(
-        update={"llm": Kernel.ephemeral().settings.llm.model_copy(update={"enabled": True})}
-    )
+    settings = Settings().model_copy(update={"llm": Settings().llm.model_copy(update={"enabled": True})})
     kernel = Kernel(settings, clock=clock, db_path=":memory:", llm_client_factory=lambda: client)
     kernel.finance.record_collection("1000", "2026-11-01")
     out = kernel.run_skill(SKILL, "scamper", {"product": "Logiciel de devis"})

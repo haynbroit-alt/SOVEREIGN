@@ -5,6 +5,7 @@ from __future__ import annotations
 from decimal import Decimal
 from types import SimpleNamespace
 
+import pytest
 from pydantic import BaseModel
 
 from sovereign.brain.simulation import simulate
@@ -34,6 +35,16 @@ class FakeMessages:
         )
 
 
+_OPEN: list[Kernel] = []
+
+
+@pytest.fixture(autouse=True)
+def _close_kernels():
+    yield
+    while _OPEN:
+        _OPEN.pop().close()
+
+
 def _kernel(clock, messages: FakeMessages, collected: str | None = "10000") -> Kernel:
     kernel = Kernel.ephemeral(clock=clock, llm={"enabled": True, "model": "claude-opus-5-5"})
     kernel.llm = LLMGateway(
@@ -43,6 +54,7 @@ def _kernel(clock, messages: FakeMessages, collected: str | None = "10000") -> K
     )
     if collected:
         kernel.finance.record_collection(collected, "2026-11-01")
+    _OPEN.append(kernel)
     return kernel
 
 

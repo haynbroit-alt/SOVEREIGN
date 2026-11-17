@@ -6,6 +6,7 @@ from decimal import Decimal
 
 import pytest
 
+from sovereign.config import Settings
 from sovereign.core.finance import FinanceError
 from sovereign.kernel import Kernel
 
@@ -107,7 +108,7 @@ def test_foreign_currency_refused(funded):
 
 
 def test_concurrent_requests_never_exceed_envelope(tmp_path, clock):
-    kernel = Kernel(Kernel.ephemeral().settings, clock=clock, db_path=tmp_path / "c.db")
+    kernel = Kernel(Settings(), clock=clock, db_path=tmp_path / "c.db")
     kernel.finance.record_collection("10000", "2026-11-01")
     barrier = threading.Barrier(20)
 
@@ -172,3 +173,42 @@ def test_assess_produces_metrics_and_recommendations(kernel):
 def test_check_spend(funded):
     out = funded.run_skill("finance-budget", "check_spend", {"amount": "1500"})
     assert not out.allowed and out.shortfall == Decimal("500.00")
+
+
+def _history(kernel, amounts):
+    months = ["2026-05", "2026-06", "2026-07", "2026-08", "2026-09", "2026-10", "2026-11"][-len(amounts) :]
+    for month, amount in zip(months, amounts, strict=True):
+        kernel.finance.record_collection(amount, f"{month}-03")
+
+
+def test_scenarios_flag_volatile_declining_business(kernel):
+    _history(kernel, [9000, 4000, 8000, 3000, 6000, 2000, 2500])
+    kernel.finance.request_expense("300", "saas", recurring="monthly")
+    kernel.finance.request_expense("250", "outils", recurring="monthly")
+    out = kernel.run_skill("finance-budget", "forecast", {"months": 12})
+    assert out.scenarios is not None
+    assert out.scenarios.exhaustion_probability > 0.2
+    assert out.scenarios.available_end_p10 <= out.scenarios.available_end_p50 <= out.scenarios.available_end_p90
+    assert out.metrics["finance.exhaustion_probability"] == out.scenarios.exhaustion_probability
+
+
+def test_scenarios_are_reproducible_and_calm_for_steady_growth(kernel):
+    _history(kernel, [3000, 3150, 3300, 3480, 3650, 3830])
+    first = kernel.run_skill("finance-budget", "forecast", {"months": 6}).scenarios
+    second = kernel.run_skill("finance-budget", "forecast", {"months": 6}).scenarios
+    assert first == second
+    assert first.exhaustion_probability == 0.0 and first.pessimistic_exhaustion_month is None
+
+
+def test_scenarios_need_history_and_can_be_disabled(kernel):
+    _history(kernel, [3000, 3100, 3200])
+    assert kernel.run_skill("finance-budget", "forecast", {}).scenarios is None
+    kernel.finance.record_collection("3300", "2026-11-04")
+    assert kernel.run_skill("finance-budget", "forecast", {"simulations": 0}).scenarios is None
+
+
+def test_assess_anticipates_exhaustion_risk(kernel):
+    _history(kernel, [9000, 4000, 8000, 3000, 6000, 2000, 2500])
+    kernel.finance.request_expense("300", "saas", recurring="monthly")
+    out = kernel.run_skill("finance-budget", "assess")
+    assert "finance.exhaustion_probability" in out.metrics

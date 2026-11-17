@@ -52,7 +52,7 @@ Le registre des encaissements et le journal d'audit sont **append-only** (trigge
 | `request_expense` | Approuve, refuse ou envoie en revue humaine | écriture |
 | `confirm_expense` | Déclare le règlement réel (≤ montant approuvé) | écriture |
 | `check_spend` | Vérifie un montant sans rien réserver | lecture |
-| `forecast` | Projette encaissements, enveloppe et coûts, détecte la date d'épuisement | lecture |
+| `forecast` | Projette encaissements, enveloppe et coûts, détecte la date d'épuisement ; simule 2 000 scénarios en rééchantillonnant les croissances mensuelles réellement observées (probabilité d'épuisement, disponible P10/P50/P90) | lecture |
 
 ## Entrées et sorties
 
@@ -88,4 +88,4 @@ Toutes les sorties portent aussi `summary`, `insights`, `recommendations` et `me
 
 `tests/skills/test_finance_budget.py` couvre : enveloppe de 10 %, refus de dépassement, revue humaine,
 factures sans effet budgétaire, idempotence, immutabilité SQL du registre, concurrence (threads),
-plafond du ratio, prévision et alertes de seuil.
+plafond du ratio, prévision, scénarios (reproductibles, volatilité, historique insuffisant) et alertes de seuil.
