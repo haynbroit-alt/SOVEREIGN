@@ -106,9 +106,7 @@ def test_improvement_backlog_sorted_by_ice(kernel):
 def test_verify_change_improved_degraded_and_inconclusive(kernel):
     before = [10, 11, 9, 10, 10.5, 9.5]
     after = [12, 13, 12.5, 11.5, 12, 13]
-    improved = kernel.run_skill(
-        SKILL, "verify_change", {"metric": "ventes", "before": before, "after": after}
-    )
+    improved = kernel.run_skill(SKILL, "verify_change", {"metric": "ventes", "before": before, "after": after})
     assert improved.verdict == "amélioré" and improved.p_value < 0.05
     assert improved.effect == pytest.approx(2.3333, abs=1e-3)
     assert improved.cohens_d is not None and improved.cohens_d > 1
@@ -192,9 +190,7 @@ def test_assess_empty_and_with_workspace(kernel):
     assert "Aucun projet" in empty.summary and empty.projects_analyzed == 0
     kernel.store.put("project", "p1", _project())
     kernel.store.put("project", "app", _features_project())
-    kernel.store.put(
-        "change", "c1", {"id": "c1", "metric": "nps", "before": [50, 52, 51], "after": [60, 61, 59]}
-    )
+    kernel.store.put("change", "c1", {"id": "c1", "metric": "nps", "before": [50, 52, 51], "after": [60, 61, 59]})
     kernel.store.put("change", "bad", {"id": "bad", "metric": "x", "before": [1], "after": [2]})
     out = kernel.run_skill(SKILL, "assess")
     assert out.projects_analyzed == 2 and out.unused_features == 1 and out.changes_verified == 1

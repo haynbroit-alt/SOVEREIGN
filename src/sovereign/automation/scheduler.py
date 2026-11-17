@@ -36,7 +36,9 @@ class Scheduler:
             if not time_ok:
                 continue
             row = self.app.kernel.db.one(
-                "SELECT status FROM cycle_runs WHERE cycle = ? AND period = ?", (cycle, period_key(cycle, now)))
+                "SELECT status FROM cycle_runs WHERE cycle = ? AND period = ?",
+                (cycle, period_key(cycle, now)),
+            )
             if row is None or row["status"] == "failed":
                 due.append(cycle)
         return due
@@ -48,7 +50,9 @@ class Scheduler:
         enqueued = []
         for cycle in self.due():
             task = self.app.queue.enqueue(
-                "cycle.run", {"cycle": cycle}, idempotency_key=f"cycle:{cycle}:{period_key(cycle, now)}",
+                "cycle.run",
+                {"cycle": cycle},
+                idempotency_key=f"cycle:{cycle}:{period_key(cycle, now)}",
                 priority={"monthly": 3, "weekly": 2, "daily": 1}[cycle],
             )
             enqueued.append({"cycle": cycle, "task_id": task.id, "status": task.status})

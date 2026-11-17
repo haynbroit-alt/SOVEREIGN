@@ -145,9 +145,7 @@ def test_rank_opportunities_rice_and_fit(kernel):
 
 def test_generate_activities_ansoff(kernel):
     kernel.store.put("market", "m1", {"id": "m1", "name": "PME France"})
-    kernel.store.put(
-        "need", "n1", {"id": "n1", "statement": "x", "segment": "ETI", "importance": 8, "satisfaction": 2}
-    )
+    kernel.store.put("need", "n1", {"id": "n1", "statement": "x", "segment": "ETI", "importance": 8, "satisfaction": 2})
     out = kernel.run_skill(
         SKILL,
         "generate_activities",
@@ -172,9 +170,7 @@ def test_generate_activities_ansoff(kernel):
 
 
 def test_launch_plan_sequential_funding(funded):
-    out = funded.run_skill(
-        SKILL, "launch_plan", {"name": "Offre Pro", "budget": "2000", "target_customers": 120}
-    )
+    out = funded.run_skill(SKILL, "launch_plan", {"name": "Offre Pro", "budget": "2000", "target_customers": 120})
     budgets = [(p.name, p.budget, p.funded, p.funding_status) for p in out.phases]
     assert budgets == [
         ("validation", Decimal("200.00"), Decimal("200.00"), "financée"),

@@ -144,9 +144,7 @@ class Idea(BaseModel):
 
 # -- entrées / sorties -------------------------------------------------------------------------------------
 class ExploreInput(BaseModel):
-    dimensions: dict[str, list[str]] = Field(
-        default_factory=dict, description="Vide ⇒ innovation_space du store"
-    )
+    dimensions: dict[str, list[str]] = Field(default_factory=dict, description="Vide ⇒ innovation_space du store")
     incompatible: list[list[str]] = Field(default_factory=list, description="Paires d'options incompatibles")
     space_id: str | None = None
     max_combinations: int = Field(500, ge=1, le=20000)
@@ -324,9 +322,7 @@ class InnovationCreativitySkill(Skill):
         spaces = ctx.store.list("innovation_space")
         offerings = _load(ctx, "offering", Offering)
         ideas = _load(ctx, "idea", Idea)
-        out = AssessOutput(
-            spaces=len(spaces), offerings=len(offerings), ideas=len(ideas), white_spaces=0, concepts=0
-        )
+        out = AssessOutput(spaces=len(spaces), offerings=len(offerings), ideas=len(ideas), white_spaces=0, concepts=0)
         parts: list[str] = []
         if ctx.store.count("segment") and ctx.store.count("need"):
             spaces_out = self.find_white_spaces(ctx, WhiteSpacesInput(top=5))
@@ -379,9 +375,7 @@ class InnovationCreativitySkill(Skill):
             spaces = ctx.store.list("innovation_space")
             space = next((s for s in spaces if data.space_id in (None, s.get("id"))), None)
             if space is None:
-                raise SkillError(
-                    "aucune dimension fournie et aucun « innovation_space » dans l'espace de travail"
-                )
+                raise SkillError("aucune dimension fournie et aucun « innovation_space » dans l'espace de travail")
             dimensions = space.get("dimensions", {})
             incompatible = incompatible or space.get("incompatible", [])
         names = [d for d, options in dimensions.items() if options]
@@ -394,9 +388,7 @@ class InnovationCreativitySkill(Skill):
         important_needs = [n for n in _load(ctx, "need", NeedRef) if n.importance >= 7]
         sampled = total > data.max_combinations
         indices = (
-            [i * total // data.max_combinations for i in range(data.max_combinations)]
-            if sampled
-            else range(total)
+            [i * total // data.max_combinations for i in range(data.max_combinations)] if sampled else range(total)
         )
         concepts: list[Concept] = []
         excluded = 0
@@ -462,20 +454,18 @@ class InnovationCreativitySkill(Skill):
                 )
             )
         if top and top[0].score >= 0.6:
-            best = top[0]
+            best_concept = top[0]
             out.recommendations.append(
                 Recommendation(
-                    title=f"Formaliser et tester le concept « {best.label} »",
-                    rationale=(
-                        "Meilleur compromis nouveauté / besoins importants de l'exploration morphologique."
-                    ),
-                    impact=round(min(10.0, 3 + 7 * best.score), 2),
+                    title=f"Formaliser et tester le concept « {best_concept.label} »",
+                    rationale=("Meilleur compromis nouveauté / besoins importants de l'exploration morphologique."),
+                    impact=round(min(10.0, 3 + 7 * best_concept.score), 2),
                     effort=4,
-                    confidence=0.4 + 0.3 * best.need_coverage,
+                    confidence=0.4 + 0.3 * best_concept.need_coverage,
                     urgency=4,
                     risk=0.25,
                     tags=["innovation", "concept"],
-                    evidence=[f"score={best.score}", f"nouveauté={best.novelty}"],
+                    evidence=[f"score={best_concept.score}", f"nouveauté={best_concept.novelty}"],
                 )
             )
         mode = f"échantillon de {data.max_combinations}" if sampled else "exploration complète"
@@ -497,14 +487,13 @@ class InnovationCreativitySkill(Skill):
         ideas: list[ScamperIdea] = []
 
         def add(operator: str, target: str, idea: str) -> None:
-            ideas.append(ScamperIdea(operator=operator, target=target, idea=idea))  # type: ignore[arg-type]
+            ideas.append(ScamperIdea(operator=operator, target=target, idea=idea))
 
         for comp in comps[:2]:
             add(
                 "Substituer",
                 comp,
-                f"Remplacer « {comp} » de {product} par une alternative moins coûteuse, "
-                "plus rapide ou plus durable.",
+                f"Remplacer « {comp} » de {product} par une alternative moins coûteuse, plus rapide ou plus durable.",
             )
         add("Substituer", "public", f"Proposer {product} à un autre public que {audience}.")
         add(
@@ -518,14 +507,11 @@ class InnovationCreativitySkill(Skill):
                 f"{comps[0]} + {comps[1]}",
                 f"Fusionner « {comps[0]} » et « {comps[1]} » en une seule étape pour réduire la friction.",
             )
-        other_channel = (
-            "la vente directe" if data.channel and "ligne" in _norm(data.channel) else "un canal en ligne"
-        )
+        other_channel = "la vente directe" if data.channel and "ligne" in _norm(data.channel) else "un canal en ligne"
         add(
             "Adapter",
             "canal",
-            f"Adapter {product} à {other_channel}"
-            + (f" (aujourd'hui : {data.channel})." if data.channel else "."),
+            f"Adapter {product} à {other_channel}" + (f" (aujourd'hui : {data.channel})." if data.channel else "."),
         )
         add(
             "Adapter",
@@ -533,13 +519,9 @@ class InnovationCreativitySkill(Skill):
             f"S'inspirer d'un secteur voisin ayant résolu le même problème que {product}.",
         )
         if comps:
-            add(
-                "Modifier", comps[0], f"Amplifier « {comps[0]} » pour créer une version premium de {product}."
-            )
+            add("Modifier", comps[0], f"Amplifier « {comps[0]} » pour créer une version premium de {product}.")
         add("Modifier", "format", f"Réduire {product} à l'essentiel : version « lite » à prix d'entrée.")
-        add(
-            "Proposer un autre usage", "marché", f"Utiliser {product} dans un contexte B2B ou institutionnel."
-        )
+        add("Proposer un autre usage", "marché", f"Utiliser {product} dans un contexte B2B ou institutionnel.")
         if comps:
             add(
                 "Éliminer",
@@ -605,9 +587,7 @@ class InnovationCreativitySkill(Skill):
                 if not _segment_matches(need.segment, segment):
                     continue
                 cells += 1
-                covering = [
-                    o for o in offerings if _segment_matches(o.segment, segment) and _need_matches(o, need)
-                ]
+                covering = [o for o in offerings if _segment_matches(o.segment, segment) and _need_matches(o, need)]
                 if any(o.owner == "us" for o in covering):
                     ours += 1
                     continue
@@ -819,9 +799,7 @@ class InnovationCreativitySkill(Skill):
         out = FeasibilityOutput(available_budget=available, capabilities_known=known, evaluations=results)
         if results:
             out.metrics["innovation.ideas_go"] = float(sum(1 for r in results if r.verdict == "go"))
-            out.metrics["innovation.feasibility_avg"] = round(
-                sum(r.overall for r in results) / len(results), 4
-            )
+            out.metrics["innovation.feasibility_avg"] = round(sum(r.overall for r in results) / len(results), 4)
         for result in results:
             idea = next(i for i in ideas if i.id == result.idea_id)
             if result.verdict == "go":
@@ -829,8 +807,7 @@ class InnovationCreativitySkill(Skill):
                     Recommendation(
                         title=f"Lancer un prototype de « {result.title} »",
                         rationale=(
-                            f"Faisabilité globale {result.overall:.0%} "
-                            "(moyenne géométrique des 5 dimensions TELOS)."
+                            f"Faisabilité globale {result.overall:.0%} (moyenne géométrique des 5 dimensions TELOS)."
                         ),
                         impact=round(min(10.0, 3 + 6 * idea.market_evidence), 2),
                         effort=round(min(10.0, max(0.5, idea.technical_complexity)), 2),

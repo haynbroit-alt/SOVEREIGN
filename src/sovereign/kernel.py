@@ -89,9 +89,17 @@ class Kernel:
                 self.db.execute(
                     """INSERT INTO skill_runs(skill, action, mission_id, ok, duration_ms, n_insights,
                                               n_recommendations, error, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                    (skill, action, mission_id, int(error is None), round(duration, 3),
-                     len(result.insights) if result else 0, len(result.recommendations) if result else 0,
-                     error, now),
+                    (
+                        skill,
+                        action,
+                        mission_id,
+                        int(error is None),
+                        round(duration, 3),
+                        len(result.insights) if result else 0,
+                        len(result.recommendations) if result else 0,
+                        error,
+                        now,
+                    ),
                 )
                 if result is not None:
                     for rec in result.recommendations:
@@ -112,8 +120,16 @@ class Kernel:
         """Utilité mesurée par Skill : usage, fiabilité, adoption des recommandations, résultats obtenus."""
 
         stats: dict[str, dict[str, Any]] = {
-            name: {"runs": 0, "failures": 0, "avg_ms": 0.0, "proposed": 0, "adopted": 0, "succeeded": 0,
-                   "failed": 0, "last_run": None}
+            name: {
+                "runs": 0,
+                "failures": 0,
+                "avg_ms": 0.0,
+                "proposed": 0,
+                "adopted": 0,
+                "succeeded": 0,
+                "failed": 0,
+                "last_run": None,
+            }
             for name in self.registry.names
         }
         for row in self.db.query(
@@ -121,8 +137,12 @@ class Kernel:
                       MAX(at) AS last_run FROM skill_runs GROUP BY skill"""
         ):
             if row["skill"] in stats:
-                stats[row["skill"]].update(runs=row["runs"], failures=row["failures"] or 0,
-                                           avg_ms=round(row["avg_ms"] or 0.0, 2), last_run=row["last_run"])
+                stats[row["skill"]].update(
+                    runs=row["runs"],
+                    failures=row["failures"] or 0,
+                    avg_ms=round(row["avg_ms"] or 0.0, 2),
+                    last_run=row["last_run"],
+                )
         for row in self.db.query(
             "SELECT skill, status, COUNT(DISTINCT id) AS n FROM recommendation_log GROUP BY skill, status"
         ):

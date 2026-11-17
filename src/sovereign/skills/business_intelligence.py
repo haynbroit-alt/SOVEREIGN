@@ -121,9 +121,7 @@ class SizeMarketOutput(SkillOutput):
 # -- Concurrence ----------------------------------------------------------------------------------
 class CompetitionInput(BaseModel):
     competitors: list[Competitor] = Field(default_factory=list, description="Vide ⇒ concurrents du store")
-    our_features: list[str] = Field(
-        default_factory=list, description="Nos fonctionnalités (détection des manques)"
-    )
+    our_features: list[str] = Field(default_factory=list, description="Nos fonctionnalités (détection des manques)")
 
 
 class CompetitorPosition(BaseModel):
@@ -315,9 +313,7 @@ class BusinessIntelligenceSkill(Skill):
         if not sizes:
             out.summary = "Aucun marché à dimensionner : renseignez des enregistrements « market »."
             return out
-        out.summary = (
-            f"{len(sizes)} marché(s) : TAM {total_tam}, SAM {total_sam}, SOM atteignable {total_som} par an."
-        )
+        out.summary = f"{len(sizes)} marché(s) : TAM {total_tam}, SAM {total_sam}, SOM atteignable {total_som} par an."
         out.metrics = {
             "market.tam": float(total_tam),
             "market.sam": float(total_sam),
@@ -433,9 +429,7 @@ class BusinessIntelligenceSkill(Skill):
         rare = sorted(labels[k] for k, v in counts.items() if v / n <= 1 / 3)
         stakes = sorted(labels[k] for k, v in counts.items() if v / n >= 2 / 3)
         ours = {_norm(f) for f in data.our_features}
-        missing = (
-            sorted(labels[k] for k, v in counts.items() if v / n >= 2 / 3 and k not in ours) if ours else []
-        )
+        missing = sorted(labels[k] for k, v in counts.items() if v / n >= 2 / 3 and k not in ours) if ours else []
         value_gap = n >= 2 and not any(p.quadrant == "rapport qualité/prix" for p in positions)
         out = CompetitionOutput(
             competitors_count=n,
@@ -529,8 +523,7 @@ class BusinessIntelligenceSkill(Skill):
             out.recommendations.append(
                 Recommendation(
                     title=f"Combler les fonctionnalités attendues : {', '.join(missing[:4])}",
-                    rationale="Présentes chez au moins deux tiers des concurrents : "
-                    "leur absence freine la vente.",
+                    rationale="Présentes chez au moins deux tiers des concurrents : leur absence freine la vente.",
                     impact=7,
                     effort=clamp(2 + len(missing), 0.5, 10),
                     confidence=0.7,
@@ -579,47 +572,42 @@ class BusinessIntelligenceSkill(Skill):
         underserved = [s for s in scored if s.classification in ("fortement sous-servi", "sous-servi")]
         out = NeedsOutput(needs=scored, underserved=len(underserved))
         if not scored:
-            out.summary = (
-                "Aucun besoin renseigné : ajoutez des enregistrements « need » (importance, satisfaction)."
-            )
+            out.summary = "Aucun besoin renseigné : ajoutez des enregistrements « need » (importance, satisfaction)."
             return out
         overserved = [s for s in scored if s.classification == "sur-servi"]
         out.summary = (
-            f"{len(scored)} besoin(s) analysé(s) : {len(underserved)} sous-servi(s), "
-            f"{len(overserved)} sur-servi(s)."
+            f"{len(scored)} besoin(s) analysé(s) : {len(underserved)} sous-servi(s), {len(overserved)} sur-servi(s)."
         )
         out.metrics = {
             "needs.underserved": float(len(underserved)),
             "needs.max_opportunity": scored[0].opportunity,
         }
-        for need in underserved[:3]:
+        for scored_need in underserved[:3]:
             out.insights.append(
                 Insight(
                     kind="opportunity",
-                    severity="warning" if need.classification == "fortement sous-servi" else "info",
-                    title=f"Besoin {need.classification} : {need.statement}",
-                    detail=f"Importance {need.importance}/10, satisfaction {need.satisfaction}/10, "
-                    f"score d'opportunité {need.opportunity}.",
+                    severity="warning" if scored_need.classification == "fortement sous-servi" else "info",
+                    title=f"Besoin {scored_need.classification} : {scored_need.statement}",
+                    detail=f"Importance {scored_need.importance}/10, satisfaction {scored_need.satisfaction}/10, "
+                    f"score d'opportunité {scored_need.opportunity}.",
                     metric="needs.opportunity",
-                    value=need.opportunity,
+                    value=scored_need.opportunity,
                 )
             )
             out.recommendations.append(
                 Recommendation(
-                    title=f"Concevoir une réponse au besoin « {need.statement} »",
+                    title=f"Concevoir une réponse au besoin « {scored_need.statement} »",
                     rationale=f"Écart importance − satisfaction de "
-                    f"{need.importance - need.satisfaction:.1f} points "
-                    f"(score {need.opportunity}).",
-                    impact=clamp(need.opportunity / 2, 0, 10),
+                    f"{scored_need.importance - scored_need.satisfaction:.1f} points "
+                    f"(score {scored_need.opportunity}).",
+                    impact=clamp(scored_need.opportunity / 2, 0, 10),
                     effort=5,
                     confidence=0.55,
-                    urgency=clamp(need.opportunity - 5, 0, 10),
+                    urgency=clamp(scored_need.opportunity - 5, 0, 10),
                     risk=0.2,
                     tags=["besoin", "produit"],
-                    evidence=[f"importance={need.importance}", f"satisfaction={need.satisfaction}"],
-                    follow_up=FollowUp(
-                        skill="business-intelligence", action="detect_opportunities", payload={}
-                    ),
+                    evidence=[f"importance={scored_need.importance}", f"satisfaction={scored_need.satisfaction}"],
+                    follow_up=FollowUp(skill="business-intelligence", action="detect_opportunities", payload={}),
                 )
             )
         if overserved:
@@ -632,9 +620,7 @@ class BusinessIntelligenceSkill(Skill):
             )
         return out
 
-    @action(
-        "Détecter et chiffrer les opportunités commerciales (besoins × marchés × concurrence)", risk="write"
-    )
+    @action("Détecter et chiffrer les opportunités commerciales (besoins × marchés × concurrence)", risk="write")
     def detect_opportunities(self, ctx: SkillContext, data: OpportunityScanInput) -> OpportunityScanOutput:
         needs = self._needs(ctx, data.needs)
         markets = self._markets(ctx, data.markets)
@@ -645,11 +631,7 @@ class BusinessIntelligenceSkill(Skill):
             intensity = self.analyze_competition(ctx, CompetitionInput(competitors=competitors)).intensity
         else:
             intensity = 0.5  # inconnue : hypothèse médiane, confiance réduite
-        sizes = (
-            {s.id: s for s in self.size_market(ctx, SizeMarketInput(markets=markets)).markets}
-            if markets
-            else {}
-        )
+        sizes = {s.id: s for s in self.size_market(ctx, SizeMarketInput(markets=markets)).markets} if markets else {}
         found: list[DetectedOpportunity] = []
         for need_score in scored:
             if need_score.classification not in ("fortement sous-servi", "sous-servi"):
@@ -722,14 +704,12 @@ class BusinessIntelligenceSkill(Skill):
         out = OpportunityScanOutput(opportunities=found, persisted=persisted, competition_intensity=intensity)
         if not found:
             out.summary = (
-                "Aucune opportunité détectée : aucun besoin sous-servi au-dessus du seuil "
-                f"{data.min_opportunity}."
+                f"Aucune opportunité détectée : aucun besoin sous-servi au-dessus du seuil {data.min_opportunity}."
             )
             return out
         total = to_decimal(sum((o.potential_value for o in found), Decimal("0")))
         out.summary = (
-            f"{len(found)} opportunité(s) détectée(s), potentiel cumulé {total}/an ; "
-            f"{persisted} enregistrée(s)."
+            f"{len(found)} opportunité(s) détectée(s), potentiel cumulé {total}/an ; {persisted} enregistrée(s)."
         )
         out.metrics = {"opportunities.count": float(len(found)), "opportunities.potential": float(total)}
         best_value = max((o.potential_value for o in found), default=Decimal("0"))

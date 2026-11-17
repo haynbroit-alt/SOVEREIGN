@@ -119,6 +119,11 @@ class CommandRouter:
         finally:
             self.app.kernel.db.execute(
                 "INSERT INTO command_runs(command, ok, duration_ms, source, at) VALUES (?, ?, ?, ?, ?)",
-                (name, int(ok), round((time.perf_counter() - started) * 1000, 3), source,
-                 iso(self.app.kernel.clock.now())),
+                (
+                    name,
+                    int(ok),
+                    round((time.perf_counter() - started) * 1000, 3),
+                    source,
+                    iso(self.app.kernel.clock.now()),
+                ),
             )

@@ -213,9 +213,7 @@ class CampaignResultsOutput(SkillOutput):
 
 # -- Tendances --------------------------------------------------------------------------------------
 class TrendInput(BaseModel):
-    series: list[TrendSeries] = Field(
-        default_factory=list, description="Vide ⇒ séries « trend_series » du store"
-    )
+    series: list[TrendSeries] = Field(default_factory=list, description="Vide ⇒ séries « trend_series » du store")
     threshold: float = Field(0.05, gt=0, le=1, description="Pente relative minimale par période")
 
 
@@ -520,9 +518,7 @@ class MarketingStrategySkill(Skill):
                 horizon_days=data.duration_days,
                 tags=["marketing", "campagne"],
                 evidence=[f"{a.channel}: {a.budget} ({a.share:.0%})" for a in allocations],
-                follow_up=FollowUp(
-                    skill="finance-budget", action="check_spend", payload={"amount": str(planned)}
-                ),
+                follow_up=FollowUp(skill="finance-budget", action="check_spend", payload={"amount": str(planned)}),
             )
         )
         return out
@@ -580,9 +576,7 @@ class MarketingStrategySkill(Skill):
             control = by_key.get(variant.variant_of or "")
             if control is None or not control.clicks or not variant.clicks:
                 continue
-            result = two_proportion_z_test(
-                control.conversions, control.clicks, variant.conversions, variant.clicks
-            )
+            result = two_proportion_z_test(control.conversions, control.clicks, variant.conversions, variant.clicks)
             winner = None
             if result.significant:
                 winner = variant.name if result.effect > 0 else control.name
@@ -592,9 +586,7 @@ class MarketingStrategySkill(Skill):
                     variant=variant.name,
                     control_rate=round(control.conversions / control.clicks, 5),
                     variant_rate=round(variant.conversions / variant.clicks, 5),
-                    relative_lift=round(result.relative_effect, 4)
-                    if result.relative_effect is not None
-                    else None,
+                    relative_lift=round(result.relative_effect, 4) if result.relative_effect is not None else None,
                     p_value=round(result.p_value, 5),
                     significant=result.significant,
                     winner=winner,
@@ -633,8 +625,7 @@ class MarketingStrategySkill(Skill):
                     kind="risk",
                     severity="warning",
                     title="Le marketing détruit de la valeur",
-                    detail=f"ROAS global {overall_roas:.2f} < 1 : chaque euro investi rapporte "
-                    "moins d'un euro.",
+                    detail=f"ROAS global {overall_roas:.2f} < 1 : chaque euro investi rapporte moins d'un euro.",
                     metric="marketing.roas",
                     value=overall_roas,
                 )
@@ -661,9 +652,7 @@ class MarketingStrategySkill(Skill):
                         confidence=0.7,
                         urgency=7,
                         risk=0.1,
-                        estimated_value=to_decimal(item.spend - item.revenue)
-                        if item.spend > item.revenue
-                        else None,
+                        estimated_value=to_decimal(item.spend - item.revenue) if item.spend > item.revenue else None,
                         external=True,
                         tags=["marketing", "optimisation"],
                         evidence=[f"dépense={item.spend}", f"revenu={item.revenue}", f"ROAS={item.roas}"],
@@ -682,15 +671,16 @@ class MarketingStrategySkill(Skill):
                 out.recommendations.append(
                     Recommendation(
                         title=f"Augmenter de 20 % le budget de « {item.name} »",
-                        rationale=f"ROAS {item.roas:.2f}, au moins 30 % au-dessus de la médiane "
-                        f"({reference:.2f}).",
-                        impact=clamp(4 + (item.roas or 0.0), 0, 10),
+                        rationale=f"ROAS {item.roas:.2f}, au moins 30 % au-dessus de la médiane ({reference:.2f}).",
+                        # Impact : poids de la campagne dans le mix + force du ROAS (plafonnée).
+                        impact=clamp(2 + 6 * weight + min(2.0, (item.roas or 0.0) / 3), 0, 10),
                         effort=1.5,
                         confidence=0.6,
                         urgency=5,
                         risk=0.2,
                         estimated_cost=increase,
-                        estimated_value=to_decimal(increase * Decimal(str(item.roas))),
+                        # Rendements décroissants : le ROAS marginal est supposé à 70 % du ROAS moyen.
+                        estimated_value=to_decimal(increase * Decimal(str(item.roas)) * Decimal("0.7")),
                         external=True,
                         tags=["marketing", "croissance"],
                         evidence=[f"ROAS={item.roas}", f"CPA={item.cpa}"],
@@ -760,11 +750,7 @@ class MarketingStrategySkill(Skill):
                 second = linear_fit(list(range(len(values) - half)), values[half:]).slope
                 acceleration = round(second - first, 6)
             classification: TrendClass = (
-                "rising"
-                if relative >= data.threshold
-                else "declining"
-                if relative <= -data.threshold
-                else "stable"
+                "rising" if relative >= data.threshold else "declining" if relative <= -data.threshold else "stable"
             )
             results.append(
                 TrendResult(
@@ -827,9 +813,7 @@ class MarketingStrategySkill(Skill):
             )
         return out
 
-    @action(
-        "Construire la stratégie marketing : positionnement, cible, mix de canaux, messages, plan 30/60/90"
-    )
+    @action("Construire la stratégie marketing : positionnement, cible, mix de canaux, messages, plan 30/60/90")
     def design_strategy(self, ctx: SkillContext, data: StrategyInput) -> StrategyOutput:
         segments = self._segments(ctx, data.segments)
         if not segments:
@@ -852,8 +836,7 @@ class MarketingStrategySkill(Skill):
             ]
         else:
             mix = [
-                ChannelShare(channel=ch, share=share, roas=None, basis="hypothèse")
-                for ch, share in DEFAULT_CHANNEL_MIX
+                ChannelShare(channel=ch, share=share, roas=None, basis="hypothèse") for ch, share in DEFAULT_CHANNEL_MIX
             ]
         icp_names = {_norm(icp.name), _norm(icp.id)}
         needs = [n for n in ctx.store.list("need") if _norm(n.get("segment")) in icp_names]
@@ -870,9 +853,7 @@ class MarketingStrategySkill(Skill):
             ]
             core_need = "sa douleur principale"
         wtp_rank = sorted(segments, key=lambda s: s.willingness_to_pay).index(icp) / max(1, len(segments) - 1)
-        stance = (
-            "positionnement premium" if wtp_rank >= 0.5 and len(segments) > 1 else "positionnement accessible"
-        )
+        stance = "positionnement premium" if wtp_rank >= 0.5 and len(segments) > 1 else "positionnement accessible"
         positioning = f"{offer} : la réponse à « {core_need} » pour {icp.name} ({stance})."
         top_channel = mix[0].channel
         plan = [

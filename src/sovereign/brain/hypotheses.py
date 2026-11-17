@@ -26,38 +26,76 @@ class Hypothesis(BaseModel):
 
 # (motif de métrique, sens de l'écart observé) -> [(explication, plausibilité, skill, action)]
 _KNOWLEDGE: list[tuple[str, str, list[tuple[str, float, str, str]]]] = [
-    ("finance.collect*", "en-dessous", [
-        ("Retards de paiement clients (créances échues)", 0.55, "finance-budget", "assess"),
-        ("Baisse de la demande ou perte d'un client important", 0.5, "marketing-strategy", "assess"),
-        ("Saisonnalité de l'activité", 0.3, "watch-anticipation", "detect_market_changes"),
-    ]),
-    ("finance.utilization", "au-dessus", [
-        ("Dépenses récurrentes non réévaluées", 0.5, "finance-budget", "forecast"),
-        ("Campagnes au ROAS insuffisant", 0.45, "marketing-strategy", "measure_campaigns"),
-    ]),
-    ("marketing.*cac*", "au-dessus", [
-        ("Saturation du canal d'acquisition", 0.5, "marketing-strategy", "measure_campaigns"),
-        ("Hausse du coût des enchères publicitaires", 0.4, "watch-anticipation", "detect_market_changes"),
-        ("Baisse du taux de conversion du parcours", 0.45, "analysis-optimization", "analyze_projects"),
-    ]),
-    ("marketing.*roas*", "en-dessous", [
-        ("Ciblage inadapté au segment prioritaire", 0.45, "marketing-strategy", "segment_audiences"),
-        ("Message ou offre peu convaincants", 0.4, "marketing-strategy", "design_strategy"),
-        ("Pression concurrentielle accrue", 0.35, "business-intelligence", "analyze_competition"),
-    ]),
-    ("projects.*", "en-dessous", [
-        ("Objectifs irréalistes ou mal calibrés", 0.4, "analysis-optimization", "analyze_projects"),
-        ("Manque de capacité dans les équipes d'agents", 0.45, "intelligent-management", "measure_performance"),
-        ("Dépendances bloquantes entre missions", 0.35, "intelligent-management", "detect_conflicts"),
-    ]),
-    ("competition.*", "au-dessus", [
-        ("Consolidation du marché ou entrant dominant", 0.5, "business-intelligence", "analyze_competition"),
-        ("Signal concurrentiel manqué par la veille", 0.35, "watch-anticipation", "detect_trends"),
-    ]),
-    ("market.*", "en-dessous", [
-        ("Hypothèses de taille de marché trop optimistes", 0.5, "business-intelligence", "size_market"),
-        ("Segment cible mal choisi", 0.4, "marketing-strategy", "segment_audiences"),
-    ]),
+    (
+        "finance.collect*",
+        "en-dessous",
+        [
+            ("Retards de paiement clients (créances échues)", 0.55, "finance-budget", "assess"),
+            ("Baisse de la demande ou perte d'un client important", 0.5, "marketing-strategy", "assess"),
+            ("Saisonnalité de l'activité", 0.3, "watch-anticipation", "detect_market_changes"),
+        ],
+    ),
+    (
+        "finance.utilization",
+        "au-dessus",
+        [
+            ("Dépenses récurrentes non réévaluées", 0.5, "finance-budget", "forecast"),
+            ("Campagnes au ROAS insuffisant", 0.45, "marketing-strategy", "measure_campaigns"),
+        ],
+    ),
+    (
+        "marketing.*cac*",
+        "au-dessus",
+        [
+            ("Saturation du canal d'acquisition", 0.5, "marketing-strategy", "measure_campaigns"),
+            ("Hausse du coût des enchères publicitaires", 0.4, "watch-anticipation", "detect_market_changes"),
+            ("Baisse du taux de conversion du parcours", 0.45, "analysis-optimization", "analyze_projects"),
+        ],
+    ),
+    (
+        "marketing.*roas*",
+        "en-dessous",
+        [
+            ("Ciblage inadapté au segment prioritaire", 0.45, "marketing-strategy", "segment_audiences"),
+            ("Message ou offre peu convaincants", 0.4, "marketing-strategy", "design_strategy"),
+            ("Pression concurrentielle accrue", 0.35, "business-intelligence", "analyze_competition"),
+        ],
+    ),
+    (
+        "projects.*",
+        "en-dessous",
+        [
+            ("Objectifs irréalistes ou mal calibrés", 0.4, "analysis-optimization", "analyze_projects"),
+            (
+                "Manque de capacité dans les équipes d'agents",
+                0.45,
+                "intelligent-management",
+                "measure_performance",
+            ),
+            ("Dépendances bloquantes entre missions", 0.35, "intelligent-management", "detect_conflicts"),
+        ],
+    ),
+    (
+        "competition.*",
+        "au-dessus",
+        [
+            (
+                "Consolidation du marché ou entrant dominant",
+                0.5,
+                "business-intelligence",
+                "analyze_competition",
+            ),
+            ("Signal concurrentiel manqué par la veille", 0.35, "watch-anticipation", "detect_trends"),
+        ],
+    ),
+    (
+        "market.*",
+        "en-dessous",
+        [
+            ("Hypothèses de taille de marché trop optimistes", 0.5, "business-intelligence", "size_market"),
+            ("Segment cible mal choisi", 0.4, "marketing-strategy", "segment_audiences"),
+        ],
+    ),
 ]
 _DEFAULT = [
     ("Changement de contexte non modélisé", 0.35, "watch-anticipation", "assess"),
@@ -82,15 +120,24 @@ def explain(contradictions: list[Confrontation], limit: int = 6) -> list[Hypothe
         direction = _direction(c)
         strength = max(0.3, c.prior - c.posterior + 0.5)
         entries = next(
-            (items for pattern, sense, items in _KNOWLEDGE
-             if fnmatch.fnmatchcase(c.metric, pattern) and sense == direction),
+            (
+                items
+                for pattern, sense, items in _KNOWLEDGE
+                if fnmatch.fnmatchcase(c.metric, pattern) and sense == direction
+            ),
             _DEFAULT,
         )
         for statement, prior, skill, action in entries:
-            hypotheses.append(Hypothesis(
-                statement=statement, plausibility=round(min(0.95, prior * strength), 3), test_skill=skill,
-                test_action=action, about=c.statement, direction=direction,
-            ))
+            hypotheses.append(
+                Hypothesis(
+                    statement=statement,
+                    plausibility=round(min(0.95, prior * strength), 3),
+                    test_skill=skill,
+                    test_action=action,
+                    about=c.statement,
+                    direction=direction,
+                )
+            )
     hypotheses.sort(key=lambda h: -h.plausibility)
     unique: dict[str, Hypothesis] = {}
     for h in hypotheses:

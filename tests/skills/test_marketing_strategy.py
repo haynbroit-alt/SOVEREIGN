@@ -90,9 +90,7 @@ def test_segment_attractiveness_weights(kernel):
 
 
 def test_plan_campaign_allocation_follows_e_squared(funded):
-    out = funded.run_skill(
-        SKILL, "plan_campaign", {"objective": "sales", "budget": "500", "channels": CHANNELS}
-    )
+    out = funded.run_skill(SKILL, "plan_campaign", {"objective": "sales", "budget": "500", "channels": CHANNELS})
     assert out.planned_budget == Decimal("500.00") and not out.capped
     shares = {a.channel: a.share for a in out.allocations}
     assert shares == {"search": 0.8, "social": 0.2}
@@ -107,17 +105,13 @@ def test_plan_campaign_allocation_follows_e_squared(funded):
 
 
 def test_plan_campaign_capped_by_available_budget(funded, kernel):
-    capped = funded.run_skill(
-        SKILL, "plan_campaign", {"objective": "leads", "budget": "5000", "channels": CHANNELS}
-    )
+    capped = funded.run_skill(SKILL, "plan_campaign", {"objective": "leads", "budget": "5000", "channels": CHANNELS})
     assert capped.capped and capped.planned_budget == Decimal("1000.00")
     assert any("réduit" in i.title for i in capped.insights)
 
 
 def test_plan_campaign_without_budget_proposes_nothing(kernel):
-    out = kernel.run_skill(
-        SKILL, "plan_campaign", {"objective": "leads", "budget": "300", "channels": CHANNELS}
-    )
+    out = kernel.run_skill(SKILL, "plan_campaign", {"objective": "leads", "budget": "300", "channels": CHANNELS})
     assert out.planned_budget == Decimal("0.00")
     assert out.recommendations == []
     assert out.insights[0].severity == "critical"
@@ -131,9 +125,7 @@ def test_plan_campaign_validation(funded):
             {"objective": "sales", "budget": "100", "channels": [{"name": "x", "cpc": "1", "cvr": 0.1}]},
         )
     with pytest.raises(ValidationError):
-        funded.run_skill(
-            SKILL, "plan_campaign", {"budget": "100", "channels": [{"name": "x", "cpc": "1", "cvr": 1.5}]}
-        )
+        funded.run_skill(SKILL, "plan_campaign", {"budget": "100", "channels": [{"name": "x", "cpc": "1", "cvr": 1.5}]})
     with pytest.raises(ValidationError):
         funded.run_skill(SKILL, "plan_campaign", {"budget": "100", "channels": []})
 

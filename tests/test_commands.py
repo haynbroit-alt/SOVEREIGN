@@ -5,8 +5,23 @@ import pytest
 from sovereign.app import Sovereign
 from sovereign.commands.router import CommandError, parse, parse_options
 
-ALL = ["director", "strategy", "business", "marketing", "council", "opportunities", "projects", "audit",
-       "budget", "skills", "memory", "roadmap", "status", "improve", "report"]
+ALL = [
+    "director",
+    "strategy",
+    "business",
+    "marketing",
+    "council",
+    "opportunities",
+    "projects",
+    "audit",
+    "budget",
+    "skills",
+    "memory",
+    "roadmap",
+    "status",
+    "improve",
+    "report",
+]
 
 
 @pytest.fixture
@@ -26,7 +41,7 @@ def test_parsing():
     assert parse("/budget") == ("budget", "")
     assert parse("Que faire ?") == ("director", "Que faire ?")
     assert parse("") == ("status", "")
-    free, opts = parse_options('Lancer X --cost=500 --record --tags=a,b')
+    free, opts = parse_options("Lancer X --cost=500 --record --tags=a,b")
     assert free == "Lancer X" and opts == {"cost": "500", "record": True, "tags": "a,b"}
 
 

@@ -300,9 +300,7 @@ class IntelligentManagementSkill(Skill):
         verb = "enregistré" if created else "actualisé"
         return RegisterAgentOutput(agent=data, created=created, summary=f"Agent {data.name} {verb}.")
 
-    @action(
-        "Distribuer les missions « todo » aux agents compatibles (simulation ou application)", risk="write"
-    )
+    @action("Distribuer les missions « todo » aux agents compatibles (simulation ou application)", risk="write")
     def assign_missions(self, ctx: SkillContext, data: AssignInput) -> AssignOutput:
         agents, missions = _load_team(ctx, data)
         load = _current_load(missions)
@@ -378,9 +376,7 @@ class IntelligentManagementSkill(Skill):
             assignments=assignments,
             unassigned=unassigned,
             applied=data.apply,
-            summary=(
-                f"{len(assignments)} affectation(s) {mode}, {len(unassigned)} mission(s) non affectée(s)."
-            ),
+            summary=(f"{len(assignments)} affectation(s) {mode}, {len(unassigned)} mission(s) non affectée(s)."),
         )
         for item in unassigned:
             if "aucun agent" in item.reason:
@@ -433,9 +429,7 @@ class IntelligentManagementSkill(Skill):
         reference = median(rates) if rates else None
         for row in rows:
             if row.success_rate is not None and reference is not None and row.success_rate < reference - 0.2:
-                row.reasons.append(
-                    f"taux de succès {row.success_rate:.0%} < médiane {reference:.0%} − 20 pts"
-                )
+                row.reasons.append(f"taux de succès {row.success_rate:.0%} < médiane {reference:.0%} − 20 pts")
             if row.average_quality is not None and row.average_quality < 0.6:
                 row.reasons.append(f"qualité moyenne {row.average_quality:.0%} < 60 %")
             row.underperforming = bool(row.reasons)
@@ -513,8 +507,7 @@ class IntelligentManagementSkill(Skill):
                         missions=[m.id for m in missions if m.assigned_to == agent.id and m.status in ACTIVE],
                         agents=[agent.id],
                         detail=(
-                            f"{agent.name} porte {load[agent.id]} mission(s) "
-                            f"pour une capacité de {agent.capacity}."
+                            f"{agent.name} porte {load[agent.id]} mission(s) pour une capacité de {agent.capacity}."
                         ),
                     )
                 )
@@ -594,9 +587,7 @@ class IntelligentManagementSkill(Skill):
                 targets = [
                     a
                     for a in agents
-                    if a.id != agent.id
-                    and required <= _caps(a.capabilities)
-                    and load.get(a.id, 0) < a.capacity
+                    if a.id != agent.id and required <= _caps(a.capabilities) and load.get(a.id, 0) < a.capacity
                 ]
                 if not targets:
                     continue
@@ -616,9 +607,7 @@ class IntelligentManagementSkill(Skill):
         pending = {m.id: m for m in missions if m.status not in CLOSED}
         indegree = {mid: sum(1 for d in m.depends_on if d in pending) for mid, m in pending.items()}
         sequence: list[str] = []
-        ready = sorted(
-            (mid for mid, deg in indegree.items() if deg == 0), key=lambda i: (-pending[i].priority, i)
-        )
+        ready = sorted((mid for mid, deg in indegree.items() if deg == 0), key=lambda i: (-pending[i].priority, i))
         while ready:
             current = ready.pop(0)
             sequence.append(current)
@@ -646,20 +635,14 @@ class IntelligentManagementSkill(Skill):
             out.recommendations.append(
                 Recommendation(
                     title=f"Rééquilibrer {len(moves)} mission(s) entre agents",
-                    rationale=(
-                        "Des agents dépassent leur capacité alors que des agents compatibles "
-                        "sont disponibles."
-                    ),
+                    rationale=("Des agents dépassent leur capacité alors que des agents compatibles sont disponibles."),
                     impact=6,
                     effort=1.5,
                     confidence=0.8,
                     urgency=7,
                     risk=0.05,
                     tags=["management", "charge"],
-                    evidence=[
-                        f"{m.mission_id}: {by_id[m.from_agent].name} → {by_id[m.to_agent].name}"
-                        for m in moves
-                    ],
+                    evidence=[f"{m.mission_id}: {by_id[m.from_agent].name} → {by_id[m.to_agent].name}" for m in moves],
                 )
             )
         return out

@@ -7,6 +7,7 @@ interrogeable (JSON1) et transactionnel. Les données critiques (argent, décisi
 
 from __future__ import annotations
 
+import builtins
 from typing import Any, TypeVar, overload
 
 from pydantic import BaseModel
@@ -47,8 +48,8 @@ class RecordStore:
     @overload
     def list(self, kind: str) -> list[dict[str, Any]]: ...
     @overload
-    def list(self, kind: str, model: type[M]) -> list[M]: ...
-    def list(self, kind: str, model: type[M] | None = None) -> list[Any]:
+    def list(self, kind: str, model: type[M]) -> builtins.list[M]: ...
+    def list(self, kind: str, model: type[M] | None = None) -> builtins.list[Any]:
         rows = self.db.query("SELECT data FROM records WHERE kind = ? ORDER BY created_at, id", (kind,))
         items = [loads(r["data"]) for r in rows]
         return [model.model_validate(i) for i in items] if model else items

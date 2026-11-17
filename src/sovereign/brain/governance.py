@@ -45,12 +45,20 @@ class ApprovalQueue:
         self.db = app.kernel.db
         self.clock = app.kernel.clock
 
-    def create(self, kind: str, title: str, summary: str, payload: dict[str, Any], risk: dict[str, Any],
-               mission_id: str | None = None) -> Approval:
+    def create(
+        self,
+        kind: str,
+        title: str,
+        summary: str,
+        payload: dict[str, Any],
+        risk: dict[str, Any],
+        mission_id: str | None = None,
+    ) -> Approval:
         rec_id = payload.get("recommendation", {}).get("id")
         if rec_id:
             existing = self.db.one(
-                "SELECT id FROM approvals WHERE status = 'pending' AND json_extract(payload, '$.recommendation.id') = ?",
+                "SELECT id FROM approvals WHERE status = 'pending' "
+                "AND json_extract(payload, '$.recommendation.id') = ?",
                 (rec_id,),
             )
             if existing is not None:  # pas de doublon de validation pour une même recommandation
@@ -59,19 +67,36 @@ class ApprovalQueue:
         self.db.execute(
             """INSERT INTO approvals(id, kind, title, summary, payload, risk, status, mission_id, created_at)
                VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?)""",
-            (approval_id, kind, title, summary, dumps(payload), dumps(risk), mission_id, iso(self.clock.now())),
+            (
+                approval_id,
+                kind,
+                title,
+                summary,
+                dumps(payload),
+                dumps(risk),
+                mission_id,
+                iso(self.clock.now()),
+            ),
         )
-        self.app.kernel.events.publish("approval.requested", {"approval_id": approval_id, "title": title},
-                                       source="governance")
+        self.app.kernel.events.publish(
+            "approval.requested", {"approval_id": approval_id, "title": title}, source="governance"
+        )
         return self.get(approval_id)
 
     def _row(self, row: Any) -> Approval:
         return Approval(
-            id=row["id"], kind=row["kind"], title=row["title"], summary=row["summary"],
-            payload=loads(row["payload"]), risk=loads(row["risk"]), status=row["status"],
-            mission_id=row["mission_id"], created_at=parse_dt(row["created_at"]),
+            id=row["id"],
+            kind=row["kind"],
+            title=row["title"],
+            summary=row["summary"],
+            payload=loads(row["payload"]),
+            risk=loads(row["risk"]),
+            status=row["status"],
+            mission_id=row["mission_id"],
+            created_at=parse_dt(row["created_at"]),
             decided_at=parse_dt(row["decided_at"]) if row["decided_at"] else None,
-            decided_by=row["decided_by"], reason=row["reason"],
+            decided_by=row["decided_by"],
+            reason=row["reason"],
         )
 
     def get(self, approval_id: str) -> Approval:
@@ -102,11 +127,15 @@ class ApprovalQueue:
         decision = kernel.memory.record(
             title=approval.title,
             decision=("Approuvé : " if approve else "Refusé : ") + rec.get("title", approval.title),
-            context=approval.summary, rationale=reason or rec.get("rationale", ""),
-            category=(rec.get("tags") or ["général"])[0], tags=rec.get("tags", []),
+            context=approval.summary,
+            rationale=reason or rec.get("rationale", ""),
+            category=(rec.get("tags") or ["général"])[0],
+            tags=rec.get("tags", []),
             skills=[rec["skill"]] if rec.get("skill") else [],
             recommendation_ids=[rec["id"]] if (rec.get("id") and approve) else [],
-            confidence=float(rec.get("confidence", 0.5)), review_at=None, source=f"human:{actor}",
+            confidence=float(rec.get("confidence", 0.5)),
+            review_at=None,
+            source=f"human:{actor}",
         )
         effects["decision_id"] = decision.id
         if approve:
@@ -114,22 +143,38 @@ class ApprovalQueue:
                 kernel.db.execute(
                     """INSERT OR IGNORE INTO recommendation_log(id, skill, title, mission_id, status, at)
                        VALUES (?, ?, ?, ?, 'adopted', ?)""",
-                    (rec["id"], rec.get("skill", ""), rec.get("title", ""), approval.mission_id,
-                     iso(self.clock.now())),
+                    (
+                        rec["id"],
+                        rec.get("skill", ""),
+                        rec.get("title", ""),
+                        approval.mission_id,
+                        iso(self.clock.now()),
+                    ),
                 )
             cost = rec.get("estimated_cost")
             if cost is not None and Decimal(str(cost)) > 0:
                 expense = kernel.finance.request_expense(
-                    cost, (rec.get("tags") or ["divers"])[0], description=rec.get("title"),
-                    requested_by=f"human:{actor}", reference=f"approval:{approval_id}",
+                    cost,
+                    (rec.get("tags") or ["divers"])[0],
+                    description=rec.get("title"),
+                    requested_by=f"human:{actor}",
+                    reference=f"approval:{approval_id}",
                 )
-                effects["expense"] = {"id": expense.expense.id, "status": expense.expense.status,
-                                      "message": expense.message}
+                effects["expense"] = {
+                    "id": expense.expense.id,
+                    "status": expense.expense.status,
+                    "message": expense.message,
+                }
             follow = rec.get("follow_up")
             if follow:
                 task = self.app.queue.enqueue(
-                    "skill.run", {"skill": follow["skill"], "action": follow["action"],
-                                  "input": follow.get("payload", {}), "mission_id": approval.mission_id},
+                    "skill.run",
+                    {
+                        "skill": follow["skill"],
+                        "action": follow["action"],
+                        "input": follow.get("payload", {}),
+                        "mission_id": approval.mission_id,
+                    },
                     idempotency_key=f"approval:{approval_id}",
                 )
                 effects["task_id"] = task.id

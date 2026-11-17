@@ -45,9 +45,7 @@ def test_ingest_deduplicates(kernel):
 
 
 def test_emerging_and_declining_terms(kernel):
-    signals = [
-        _signal(f"Montée de l'automatisation agentique {i}", f"2026-11-{10 + i:02d}") for i in range(5)
-    ]
+    signals = [_signal(f"Montée de l'automatisation agentique {i}", f"2026-11-{10 + i:02d}") for i in range(5)]
     signals.append(_signal("Une remarque agentique isolée", "2026-09-15"))
     signals += [_signal(f"Blockchain partout épisode {i}", f"2026-09-{10 + i:02d}") for i in range(12)]
     kernel.run_skill(SKILL, "ingest_signals", {"signals": signals})
@@ -184,9 +182,7 @@ def test_versions_persisted_then_used_offline(kernel):
 
 def test_version_ahead_is_ok(kernel):
     kernel.registry.get(SKILL).fetcher = lambda url: {"info": {"version": "2.9"}, "releases": {}}
-    out = kernel.run_skill(
-        SKILL, "check_technologies", {"dependencies": [{"name": "x", "current_version": "3.0.0"}]}
-    )
+    out = kernel.run_skill(SKILL, "check_technologies", {"dependencies": [{"name": "x", "current_version": "3.0.0"}]})
     assert out.dependencies[0].lag == "ahead" and out.dependencies[0].status == "ok"
 
 

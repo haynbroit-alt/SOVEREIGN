@@ -63,7 +63,7 @@ def test_worker_handles_unknown_and_failing_tasks(app):
     app.queue.enqueue("unknown.kind", {}, max_attempts=1)
     app.queue.enqueue("skill.run", {"skill": "finance-budget", "action": "nope"}, max_attempts=1)
     dead_events = []
-    app.kernel.events.subscribe("task.dead", lambda e: dead_events.append(e))
+    app.kernel.events.subscribe("task.dead", dead_events.append)
     assert app.worker.run_once() == 3  # 2 tâches + 1 alerte « task.dead » générée par la règle
     assert app.queue.stats()["dead"] == 2
     assert len(dead_events) == 1  # le type inconnu échoue avant exécution
@@ -129,8 +129,10 @@ def test_outcome_triggers_learning(app):
 # -- webhooks --------------------------------------------------------------------------------------------
 @pytest.fixture
 def hooked(clock):
-    application = Sovereign.ephemeral(clock=FixedClock(datetime.now(UTC)), security={
-        "webhook_secrets": {"stripe": "whsec_test", "github": "gh_secret", "generic": "gen_secret"}})
+    application = Sovereign.ephemeral(
+        clock=FixedClock(datetime.now(UTC)),
+        security={"webhook_secrets": {"stripe": "whsec_test", "github": "gh_secret", "generic": "gen_secret"}},
+    )
     yield application
     application.close()
 
@@ -142,8 +144,12 @@ def _stripe_headers(body: bytes, secret: str = "whsec_test") -> dict[str, str]:
 
 
 def test_stripe_payment_becomes_real_collection(hooked):
-    body = json.dumps({"type": "payment_intent.succeeded", "data": {"object": {
-        "id": "pi_1", "amount_received": 125000, "currency": "eur", "customer": "cus_1"}}}).encode()
+    body = json.dumps(
+        {
+            "type": "payment_intent.succeeded",
+            "data": {"object": {"id": "pi_1", "amount_received": 125000, "currency": "eur", "customer": "cus_1"}},
+        }
+    ).encode()
     result = handle_webhook(hooked, "stripe", body, _stripe_headers(body))
     assert result["accepted"] and not result["duplicate"]
     assert str(hooked.kernel.finance.collected_total()) == "1250.00"
@@ -152,8 +158,12 @@ def test_stripe_payment_becomes_real_collection(hooked):
 
 
 def test_stripe_refund_and_bad_signature(hooked):
-    body = json.dumps({"type": "charge.refunded", "data": {"object": {
-        "id": "ch_1", "amount_refunded": 5000, "currency": "eur"}}}).encode()
+    body = json.dumps(
+        {
+            "type": "charge.refunded",
+            "data": {"object": {"id": "ch_1", "amount_refunded": 5000, "currency": "eur"}},
+        }
+    ).encode()
     with pytest.raises(WebhookError) as err:
         handle_webhook(hooked, "stripe", body, _stripe_headers(body, "wrong"))
     assert err.value.status == 401
@@ -162,11 +172,16 @@ def test_stripe_refund_and_bad_signature(hooked):
 
 
 def test_github_release_and_generic_event(hooked):
-    body = json.dumps({"action": "published", "release": {"tag_name": "v2"},
-                       "repository": {"full_name": "o/r"}}).encode()
+    body = json.dumps(
+        {"action": "published", "release": {"tag_name": "v2"}, "repository": {"full_name": "o/r"}}
+    ).encode()
     sig = "sha256=" + hmac.new(b"gh_secret", body, hashlib.sha256).hexdigest()
-    out = handle_webhook(hooked, "github", body, {"X-Hub-Signature-256": sig, "X-GitHub-Event": "release",
-                                                  "X-GitHub-Delivery": "d1"})
+    out = handle_webhook(
+        hooked,
+        "github",
+        body,
+        {"X-Hub-Signature-256": sig, "X-GitHub-Event": "release", "X-GitHub-Delivery": "d1"},
+    )
     assert out["event"] == "github.release"
     generic = json.dumps({"type": "metric.anomaly", "id": "e1", "payload": {"z": 6, "metric": "x"}}).encode()
     result = handle_webhook(hooked, "generic", generic, sign_payload("gen_secret", generic))
@@ -186,8 +201,10 @@ def test_notifier_signs_outgoing_payloads():
     def transport(url, body, headers):
         captured.update(url=url, body=body, headers=headers)
 
-    notifier = Notifier(AutomationSettings(notify_webhook_url="https://hooks.example.test/x",
-                                           notify_webhook_secret="s"), transport=transport)
+    notifier = Notifier(
+        AutomationSettings(notify_webhook_url="https://hooks.example.test/x", notify_webhook_secret="s"),
+        transport=transport,
+    )
     assert notifier.send("Titre", "Texte")
     verify_webhook("generic", "s", captured["body"], captured["headers"])
     assert json.loads(captured["body"])["text"].startswith("*SOVEREIGN — Titre*")

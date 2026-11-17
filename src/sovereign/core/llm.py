@@ -34,8 +34,19 @@ PRICES_USD_PER_MTOK: dict[str, tuple[Decimal, Decimal]] = {
 # Conversion prudente : 1 USD compté comme 1 unité de la devise du registre (sur-estime le coût en EUR/GBP/CHF).
 USD_RATE = Decimal("1")
 _UNSUPPORTED_SCHEMA_KEYS = {
-    "default", "title", "minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum", "minLength",
-    "maxLength", "pattern", "format", "minItems", "maxItems", "examples",
+    "default",
+    "title",
+    "minimum",
+    "maximum",
+    "exclusiveMinimum",
+    "exclusiveMaximum",
+    "minLength",
+    "maxLength",
+    "pattern",
+    "format",
+    "minItems",
+    "maxItems",
+    "examples",
 }
 
 
@@ -117,11 +128,18 @@ class LLMGateway:
         model = self.settings.model
         estimate = estimate_cost(model, len(system) + len(prompt), max_tokens)
         if estimate > self.settings.max_cost_per_call:
-            log.info("appel LLM ignoré : coût max estimé %s > plafond %s", estimate, self.settings.max_cost_per_call)
+            log.info(
+                "appel LLM ignoré : coût max estimé %s > plafond %s",
+                estimate,
+                self.settings.max_cost_per_call,
+            )
             self.denied_by_budget += 1
             return None
         decision = self.finance.request_expense(
-            estimate, "ia", vendor="Anthropic", description=f"LLM {model} : {purpose}",
+            estimate,
+            "ia",
+            vendor="Anthropic",
+            description=f"LLM {model} : {purpose}",
             requested_by="sovereign-llm",
         )
         if not decision.approved:
@@ -139,8 +157,10 @@ class LLMGateway:
                 messages=[{"role": "user", "content": prompt}],
                 betas=["server-side-fallback-2026-07-01"],
                 fallbacks="default",
-                output_config={"effort": self.settings.effort, "format": {
-                    "type": "json_schema", "schema": strict_schema(output_model)}},
+                output_config={
+                    "effort": self.settings.effort,
+                    "format": {"type": "json_schema", "schema": strict_schema(output_model)},
+                },
             )
         except Exception as exc:
             log.warning("appel LLM en échec (%s) : repli déterministe", type(exc).__name__)

@@ -5,8 +5,9 @@ Pour une recommandation, on tire N scénarios :
 - valeur en cas de succès ~ triangulaire(v × (1 − u), v, v × (1 + u/2)), u = incertitude = 1,2 − confiance ;
 - coût ~ triangulaire(0,9 c, c, 1,4 c) (les dépassements sont plus fréquents que les économies).
 
-Résultat net = valeur obtenue − coût. Si aucun montant n'est estimé, la simulation se fait en « points
-d'impact » (impact 0-10, coût ≈ 0,3 × effort) et le signale. Le tirage est reproductible (graine dérivée de
+Résultat net = valeur obtenue − coût. Si la VALEUR n'est pas chiffrée, la simulation se fait en « points
+d'impact » (impact 0-10 ; coût ≈ 0,3 × effort + 5 × part du budget disponible consommée) et le signale :
+une valeur inconnue n'est jamais assimilée à zéro. Le tirage est reproductible (graine dérivée de
 l'identifiant de la recommandation).
 
 Le classement de risque décide de la suite de la boucle : RISQUE FAIBLE → exécution interne automatique,
@@ -55,14 +56,22 @@ def simulate(
     rng = random.Random(seed if seed is not None else _seed(rec.id or rec.title))
     p_success = max(0.0, min(1.0, rec.confidence * (1 - 0.5 * rec.risk)))
     uncertainty = max(0.05, 1.2 - rec.confidence)
-    monetary = rec.estimated_value is not None or rec.estimated_cost is not None
-    if monetary:
-        value = float(rec.estimated_value or 0)
+    if rec.estimated_value is not None:
+        value = float(rec.estimated_value)
         cost = float(rec.estimated_cost or 0)
         unit: Literal["money", "impact_points"] = "money"
     else:
+        # Valeur non chiffrée : on raisonne en points d'impact. Une dépense connue est convertie en points selon
+        # la part du budget disponible qu'elle consomme (jamais comptée comme une valeur nulle).
         value = rec.impact
         cost = 0.3 * rec.effort
+        if rec.estimated_cost:
+            share = (
+                float(rec.estimated_cost) / float(available_budget)
+                if available_budget and available_budget > 0
+                else 1.0
+            )
+            cost += 5 * min(1.0, share)
         unit = "impact_points"
     outcomes: list[float] = []
     for _ in range(runs):
@@ -90,8 +99,16 @@ def simulate(
     if expected <= 0:
         reasons.append("espérance non positive")
     return SimulationResult(
-        recommendation_id=rec.id, title=rec.title, unit=unit, runs=runs, p_success=round(p_success, 4),
-        expected_value=round(expected, 2), p_loss=round(p_loss, 4), p5=round(percentile(outcomes, 5), 2),
-        p50=round(percentile(outcomes, 50), 2), p95=round(percentile(outcomes, 95), 2),
-        risk_class="high" if reasons else "low", reasons=reasons,
+        recommendation_id=rec.id,
+        title=rec.title,
+        unit=unit,
+        runs=runs,
+        p_success=round(p_success, 4),
+        expected_value=round(expected, 2),
+        p_loss=round(p_loss, 4),
+        p5=round(percentile(outcomes, 5), 2),
+        p50=round(percentile(outcomes, 50), 2),
+        p95=round(percentile(outcomes, 95), 2),
+        risk_class="high" if reasons else "low",
+        reasons=reasons,
     )

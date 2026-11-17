@@ -18,8 +18,9 @@ def test_envelope_is_ten_percent_of_collected(funded):
 
 
 def test_invoices_open_no_budget_until_collected(kernel):
-    invoice = kernel.run_skill("finance-budget", "issue_invoice",
-                               {"client": "ACME", "amount": "5000", "due_on": "2026-11-10"}).invoice
+    invoice = kernel.run_skill(
+        "finance-budget", "issue_invoice", {"client": "ACME", "amount": "5000", "due_on": "2026-11-10"}
+    ).invoice
     status = kernel.finance.status()
     assert status.envelope == 0 and status.receivables == Decimal("5000.00")
     assert any("échue" in a for a in status.alerts)
@@ -56,8 +57,9 @@ def test_small_expense_approved_and_spent(funded):
     assert decision.approved and "manuellement" in decision.message
     with pytest.raises(FinanceError):
         funded.finance.confirm_spent(decision.expense.id, "150")
-    spent = funded.run_skill("finance-budget", "confirm_expense",
-                             {"expense_id": decision.expense.id, "actual": "90"}).expense
+    spent = funded.run_skill(
+        "finance-budget", "confirm_expense", {"expense_id": decision.expense.id, "actual": "90"}
+    ).expense
     assert spent.status == "spent" and spent.actual == Decimal("90.00")
     assert funded.finance.available() == Decimal("910.00")
 
@@ -136,8 +138,14 @@ def test_threshold_event_emitted_once(funded):
 
 
 def test_forecast_detects_exhaustion(kernel, clock):
-    for month, amount in [("2026-06", 3000), ("2026-07", 2500), ("2026-08", 2000), ("2026-09", 1500),
-                          ("2026-10", 1000), ("2026-11", 500)]:
+    for month, amount in [
+        ("2026-06", 3000),
+        ("2026-07", 2500),
+        ("2026-08", 2000),
+        ("2026-09", 1500),
+        ("2026-10", 1000),
+        ("2026-11", 500),
+    ]:
         kernel.finance.record_collection(amount, f"{month}-05")
     decision = kernel.finance.request_expense("200", "saas", recurring="monthly")
     assert decision.approved

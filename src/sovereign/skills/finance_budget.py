@@ -160,47 +160,85 @@ class FinanceBudgetSkill(Skill):
                 trend = fit.slope / base
                 out.metrics["finance.collections_trend"] = round(trend, 4)
                 if trend < -0.05:
-                    out.insights.append(Insight(
-                        kind="trend", severity="warning", title="Encaissements mensuels en baisse",
-                        detail=f"Pente {fit.slope:.2f}/mois ({trend:.1%} de la moyenne) sur {len(values)} mois.",
-                        metric="finance.collections_trend", value=trend,
-                    ))
-                    out.recommendations.append(Recommendation(
-                        title="Enrayer la baisse des encaissements",
-                        rationale="La tendance mensuelle est négative : prioriser relances, rétention et ventes.",
-                        impact=8, effort=5, confidence=min(0.9, 0.5 + fit.r2 / 2), urgency=8, risk=0.1,
-                        tags=["finance", "revenus"], evidence=[f"pente={fit.slope:.2f}", f"r2={fit.r2:.2f}"],
-                    ))
+                    out.insights.append(
+                        Insight(
+                            kind="trend",
+                            severity="warning",
+                            title="Encaissements mensuels en baisse",
+                            detail=f"Pente {fit.slope:.2f}/mois ({trend:.1%} de la moyenne) sur {len(values)} mois.",
+                            metric="finance.collections_trend",
+                            value=trend,
+                        )
+                    )
+                    out.recommendations.append(
+                        Recommendation(
+                            title="Enrayer la baisse des encaissements",
+                            rationale="La tendance mensuelle est négative : prioriser relances, rétention et ventes.",
+                            impact=8,
+                            effort=5,
+                            confidence=min(0.9, 0.5 + fit.r2 / 2),
+                            urgency=8,
+                            risk=0.1,
+                            tags=["finance", "revenus"],
+                            evidence=[f"pente={fit.slope:.2f}", f"r2={fit.r2:.2f}"],
+                        )
+                    )
                 elif trend > 0.05:
-                    out.insights.append(Insight(
-                        kind="strength", title="Encaissements mensuels en hausse",
-                        detail=f"+{trend:.1%} de la moyenne par mois.", metric="finance.collections_trend",
-                        value=trend,
-                    ))
+                    out.insights.append(
+                        Insight(
+                            kind="strength",
+                            title="Encaissements mensuels en hausse",
+                            detail=f"+{trend:.1%} de la moyenne par mois.",
+                            metric="finance.collections_trend",
+                            value=trend,
+                        )
+                    )
         today = ctx.clock.now().date()
         overdue = [i for i in ctx.finance.invoices("open") if i.due_on and i.due_on < today]
         if overdue:
             total = sum((i.amount for i in overdue), Decimal("0"))
             weight = float(total / status.collected_total) if status.collected_total > 0 else 1.0
-            out.recommendations.append(Recommendation(
-                title=f"Relancer {len(overdue)} facture(s) échue(s) ({total})",
-                rationale="Une créance n'ouvre aucun budget tant qu'elle n'est pas encaissée.",
-                impact=min(10, 4 + 10 * weight), effort=1.5, confidence=0.8, urgency=8, risk=0.05,
-                estimated_value=to_decimal(total), external=True, tags=["finance", "trésorerie"],
-                evidence=[f"{i.client}: {i.amount} échue le {i.due_on}" for i in overdue[:5]],
-            ))
+            out.recommendations.append(
+                Recommendation(
+                    title=f"Relancer {len(overdue)} facture(s) échue(s) ({total})",
+                    rationale="Une créance n'ouvre aucun budget tant qu'elle n'est pas encaissée.",
+                    impact=min(10, 4 + 10 * weight),
+                    effort=1.5,
+                    confidence=0.8,
+                    urgency=8,
+                    risk=0.05,
+                    estimated_value=to_decimal(total),
+                    external=True,
+                    tags=["finance", "trésorerie"],
+                    evidence=[f"{i.client}: {i.amount} échue le {i.due_on}" for i in overdue[:5]],
+                )
+            )
         if status.pending_review:
-            out.recommendations.append(Recommendation(
-                title=f"Statuer sur {status.pending_review} dépense(s) en revue",
-                rationale="Des dépenses importantes attendent une validation humaine.",
-                impact=4, effort=1, confidence=0.9, urgency=6, risk=0.05, tags=["finance", "gouvernance"],
-            ))
+            out.recommendations.append(
+                Recommendation(
+                    title=f"Statuer sur {status.pending_review} dépense(s) en revue",
+                    rationale="Des dépenses importantes attendent une validation humaine.",
+                    impact=4,
+                    effort=1,
+                    confidence=0.9,
+                    urgency=6,
+                    risk=0.05,
+                    tags=["finance", "gouvernance"],
+                )
+            )
         if status.envelope > 0 and status.utilization >= 0.8:
-            out.recommendations.append(Recommendation(
-                title="Geler les dépenses non essentielles",
-                rationale=f"{status.utilization:.0%} de l'enveloppe est consommée.",
-                impact=6, effort=1, confidence=0.85, urgency=9, risk=0.05, tags=["finance", "budget"],
-            ))
+            out.recommendations.append(
+                Recommendation(
+                    title="Geler les dépenses non essentielles",
+                    rationale=f"{status.utilization:.0%} de l'enveloppe est consommée.",
+                    impact=6,
+                    effort=1,
+                    confidence=0.85,
+                    urgency=9,
+                    risk=0.05,
+                    tags=["finance", "budget"],
+                )
+            )
         return out
 
     @staticmethod
@@ -219,8 +257,13 @@ class FinanceBudgetSkill(Skill):
     @action("Enregistrer un encaissement réel (idempotent sur la référence)", risk="write")
     def record_revenue(self, ctx: SkillContext, data: RevenueInput) -> RevenueOutput:
         entry = ctx.finance.record_collection(
-            data.amount, data.occurred_on, counterparty=data.counterparty, description=data.description,
-            reference=data.reference, currency=data.currency, actor=ctx.caller,
+            data.amount,
+            data.occurred_on,
+            counterparty=data.counterparty,
+            description=data.description,
+            reference=data.reference,
+            currency=data.currency,
+            actor=ctx.caller,
         )
         status = ctx.finance.status()
         return RevenueOutput(entry=entry, duplicate=entry.duplicate, status=status, summary=self._summary(status))
@@ -239,8 +282,14 @@ class FinanceBudgetSkill(Skill):
     @action("Demander une dépense : approuvée, refusée ou envoyée en revue humaine", risk="write")
     def request_expense(self, ctx: SkillContext, data: ExpenseRequestInput) -> ExpenseDecisionOutput:
         decision = ctx.finance.request_expense(
-            data.amount, data.category, vendor=data.vendor, description=data.description,
-            recurring=data.recurring, requested_by=ctx.caller, reference=data.reference, currency=data.currency,
+            data.amount,
+            data.category,
+            vendor=data.vendor,
+            description=data.description,
+            recurring=data.recurring,
+            requested_by=ctx.caller,
+            reference=data.reference,
+            currency=data.currency,
         )
         return ExpenseDecisionOutput(decision=decision, summary=decision.message)
 
@@ -255,7 +304,9 @@ class FinanceBudgetSkill(Skill):
         allowed = data.amount <= available
         shortfall = to_decimal(max(Decimal("0"), data.amount - available))
         return CheckSpendOutput(
-            allowed=allowed, available=available, shortfall=shortfall,
+            allowed=allowed,
+            available=available,
+            shortfall=shortfall,
             summary=("Autorisable." if allowed else f"Non autorisable : il manque {shortfall}."),
         )
 
@@ -290,13 +341,19 @@ class FinanceBudgetSkill(Skill):
                 return Decimal("0.00")
 
         recurring_monthly = sum(
-            (e.actual or e.amount for e in finance.expenses() if e.recurring == "monthly"
-             and e.status in ("approved", "spent")),
+            (
+                e.actual or e.amount
+                for e in finance.expenses()
+                if e.recurring == "monthly" and e.status in ("approved", "spent")
+            ),
             Decimal("0"),
         )
         recurring_yearly = sum(
-            (e.actual or e.amount for e in finance.expenses() if e.recurring == "yearly"
-             and e.status in ("approved", "spent")),
+            (
+                e.actual or e.amount
+                for e in finance.expenses()
+                if e.recurring == "yearly" and e.status in ("approved", "spent")
+            ),
             Decimal("0"),
         )
         available = finance.available()
@@ -309,22 +366,35 @@ class FinanceBudgetSkill(Skill):
             planned = sum((p.amount for p in data.planned_expenses if p.month_offset == step), Decimal("0"))
             costs = to_decimal(recurring_monthly + (recurring_yearly / 12) + planned)
             available = to_decimal(available + envelope_increase - costs)
-            months.append(ForecastMonth(
-                month=month, projected_collections=collections, projected_envelope_increase=envelope_increase,
-                projected_costs=costs, projected_available_end=available,
-            ))
+            months.append(
+                ForecastMonth(
+                    month=month,
+                    projected_collections=collections,
+                    projected_envelope_increase=envelope_increase,
+                    projected_costs=costs,
+                    projected_available_end=available,
+                )
+            )
             if available < 0 and exhaustion is None:
                 exhaustion = month
         out = ForecastOutput(method=method, monthly_trend=trend, months=months, exhaustion_month=exhaustion)
         if exhaustion:
             out.summary = f"Enveloppe épuisée prévue en {exhaustion} au rythme actuel des coûts."
-            out.insights.append(Insight(kind="risk", severity="critical", title="Épuisement budgétaire prévu",
-                                        detail=out.summary))
-            out.recommendations.append(Recommendation(
-                title=f"Réduire les coûts récurrents avant {exhaustion}",
-                rationale="Les coûts projetés dépassent l'enveloppe générée par les encaissements prévus.",
-                impact=8, effort=3, confidence=0.6, urgency=8, risk=0.1, tags=["finance", "coûts"],
-            ))
+            out.insights.append(
+                Insight(kind="risk", severity="critical", title="Épuisement budgétaire prévu", detail=out.summary)
+            )
+            out.recommendations.append(
+                Recommendation(
+                    title=f"Réduire les coûts récurrents avant {exhaustion}",
+                    rationale="Les coûts projetés dépassent l'enveloppe générée par les encaissements prévus.",
+                    impact=8,
+                    effort=3,
+                    confidence=0.6,
+                    urgency=8,
+                    risk=0.1,
+                    tags=["finance", "coûts"],
+                )
+            )
         else:
             out.summary = f"Aucun épuisement prévu sur {data.months} mois ({method})."
         return out

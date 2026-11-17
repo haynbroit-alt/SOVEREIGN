@@ -128,9 +128,7 @@ class ProjectsOutput(SkillOutput):
 
 class UnusedFeaturesInput(BaseModel):
     projects: list[Project] = Field(default_factory=list, description="Vide ⇒ projets de l'espace de travail")
-    share_threshold: float = Field(
-        0.05, gt=0, lt=1, description="Part d'utilisateurs sous laquelle on alerte"
-    )
+    share_threshold: float = Field(0.05, gt=0, lt=1, description="Part d'utilisateurs sous laquelle on alerte")
     recent_days: int = Field(30, ge=0, description="Fonctionnalités plus récentes ignorées")
 
 
@@ -195,16 +193,12 @@ class VerifyChangeOutput(SkillOutput):
     p_value: float
     cohens_d: float | None
     verdict: Literal["amélioré", "dégradé", "non concluant"]
-    sample_size_needed: int | None = Field(
-        None, description="Taille par groupe pour 80 % de puissance (Lehr)"
-    )
+    sample_size_needed: int | None = Field(None, description="Taille par groupe pour 80 % de puissance (Lehr)")
 
 
 class AuditSystemInput(BaseModel):
     min_recommendations: int = Field(5, ge=1, description="Propositions minimales avant de juger l'adoption")
-    min_activity: int = Field(
-        20, ge=0, description="Exécutions totales minimales avant de juger l'inutilisation"
-    )
+    min_activity: int = Field(20, ge=0, description="Exécutions totales minimales avant de juger l'inutilisation")
 
 
 class SkillAudit(BaseModel):
@@ -315,9 +309,7 @@ class AnalysisOptimizationSkill(Skill):
         if projects:
             analysis = self.analyze_projects(ctx, ProjectsInput(projects=projects))
             unused = self.detect_unused_features(ctx, UnusedFeaturesInput(projects=projects))
-            improvements = self.recommend_improvements(
-                ctx, ImprovementsInput(projects=projects, max_items=10)
-            )
+            improvements = self.recommend_improvements(ctx, ImprovementsInput(projects=projects, max_items=10))
             out.unused_features = len(unused.unused)
             out.backlog = improvements.backlog
             out.insights.extend(analysis.insights + unused.insights)
@@ -383,18 +375,12 @@ class AnalysisOptimizationSkill(Skill):
                     )
                 )
             total_weight = sum(k.weight for k in kpis)
-            health = (
-                round(sum(min(k.attainment, 1.0) * k.weight for k in kpis) / total_weight, 4)
-                if kpis
-                else None
-            )
+            health = round(sum(min(k.attainment, 1.0) * k.weight for k in kpis) / total_weight, 4) if kpis else None
             status = project_status(health)
             weak = sorted((k for k in kpis if k.attainment < 0.9), key=lambda k: k.attainment)
             weak_points = [f"{k.name} : {k.attainment:.0%} de la cible" for k in weak[:3]]
             weak_points += [
-                f"{k.name} : tendance défavorable"
-                for k in kpis
-                if k.trend == "degrading" and k.attainment >= 0.9
+                f"{k.name} : tendance défavorable" for k in kpis if k.trend == "degrading" and k.attainment >= 0.9
             ]
             results.append(
                 ProjectHealth(
@@ -480,9 +466,7 @@ class AnalysisOptimizationSkill(Skill):
         if not projects:
             out.summary = "Aucun projet à analyser."
         else:
-            counts = {
-                s: sum(1 for r in results if r.status == s) for s in ("on_track", "at_risk", "off_track")
-            }
+            counts = {s: sum(1 for r in results if r.status == s) for s in ("on_track", "at_risk", "off_track")}
             out.summary = (
                 f"{len(results)} projet(s) : {counts['on_track']} sur la bonne voie, {counts['at_risk']} à "
                 f"risque, {counts['off_track']} hors trajectoire"
@@ -500,7 +484,11 @@ class AnalysisOptimizationSkill(Skill):
             if not project.features:
                 continue
             active = project.active_users or max((f.users for f in project.features), default=0)
-            p20 = percentile([float(f.uses) for f in project.features], 20)
+            # Le quintile est calculé sur les fonctionnalités évaluables (les nouveautés récentes faussent la base).
+            mature = [
+                f for f in project.features if f.released_on is None or (today - f.released_on).days >= data.recent_days
+            ]
+            p20 = percentile([float(f.uses) for f in (mature or project.features)], 20)
             total_uses = sum(f.uses for f in project.features)
             pareto: set[str] = set()
             cumulative = 0
@@ -511,18 +499,17 @@ class AnalysisOptimizationSkill(Skill):
                 cumulative += feature.uses
             for feature in project.features:
                 share = round(feature.users / active, 4) if active else None
-                recent = (
-                    feature.released_on is not None and (today - feature.released_on).days < data.recent_days
-                )
+                recent = feature.released_on is not None and (today - feature.released_on).days < data.recent_days
                 low_share = share is not None and share < data.share_threshold
-                low_uses = feature.uses <= p20
+                # Usages faibles : quintile inférieur OU moins de 1 % des usages totaux (robuste aux petits effectifs).
+                low_uses = feature.uses <= p20 or (total_uses > 0 and feature.uses / total_uses < 0.01)
                 unused = low_share and low_uses and not recent
                 if recent:
                     reason = f"Sortie depuis moins de {data.recent_days} jours : non évaluée."
                 elif unused:
                     reason = (
                         f"{share:.1%} des utilisateurs actifs (< {data.share_threshold:.0%}) et usages "
-                        f"({feature.uses}) dans le quintile inférieur."
+                        f"({feature.uses}) dans le quintile inférieur ou < 1 % du total."
                     )
                 elif share is None:
                     reason = "Nombre d'utilisateurs actifs inconnu."
@@ -585,10 +572,7 @@ class AnalysisOptimizationSkill(Skill):
         return out
 
     # -- recommandations -------------------------------------------------------------------------------------
-    @action(
-        "Backlog d'améliorations priorisé (ICE) : points faibles, tendances négatives, "
-        "fonctionnalités inutiles"
-    )
+    @action("Backlog d'améliorations priorisé (ICE) : points faibles, tendances négatives, fonctionnalités inutiles")
     def recommend_improvements(self, ctx: SkillContext, data: ImprovementsInput) -> ImprovementsOutput:
         projects = _load_projects(ctx, data.projects)
         analysis = self.analyze_projects(ctx, ProjectsInput(projects=projects))
@@ -612,9 +596,7 @@ class AnalysisOptimizationSkill(Skill):
                             confidence=confidence,
                             ease=ease,
                             ice=round(impact * confidence * ease, 3),
-                            rationale=(
-                                f"Atteinte {kpi.attainment:.0%} (valeur {kpi.value}, cible {kpi.target})."
-                            ),
+                            rationale=(f"Atteinte {kpi.attainment:.0%} (valeur {kpi.value}, cible {kpi.target})."),
                         )
                     )
                 elif kpi.trend == "degrading":
@@ -629,8 +611,7 @@ class AnalysisOptimizationSkill(Skill):
                             ease=6.0,
                             ice=round(impact * 0.6 * 6.0, 3),
                             rationale=(
-                                f"Cible atteinte ({kpi.attainment:.0%}) mais pente défavorable "
-                                f"({kpi.trend_slope})."
+                                f"Cible atteinte ({kpi.attainment:.0%}) mais pente défavorable ({kpi.trend_slope})."
                             ),
                         )
                     )
@@ -715,9 +696,7 @@ class AnalysisOptimizationSkill(Skill):
         )
         what = f"« {label} »" if label else "le changement"
         rel = f" ({result.relative_effect:+.1%})" if result.relative_effect is not None else ""
-        out.summary = (
-            f"{metric_name} : {out.mean_before} → {out.mean_after}{rel}, p = {out.p_value:.4f} → {verdict}."
-        )
+        out.summary = f"{metric_name} : {out.mean_before} → {out.mean_after}{rel}, p = {out.p_value:.4f} → {verdict}."
         if verdict == "dégradé":
             out.insights.append(
                 Insight(
@@ -829,9 +808,7 @@ class AnalysisOptimizationSkill(Skill):
             name = str(row["command"]).lstrip("/")
             usage[name] = usage.get(name, 0) + int(row["n"])
         commands = [CommandUsage(command=c, runs=usage.get(c, 0)) for c in KNOWN_COMMANDS]
-        commands += [
-            CommandUsage(command=c, runs=n) for c, n in sorted(usage.items()) if c not in KNOWN_COMMANDS
-        ]
+        commands += [CommandUsage(command=c, runs=n) for c, n in sorted(usage.items()) if c not in KNOWN_COMMANDS]
         total_commands = sum(usage.values())
         never_commands = (
             [c.command for c in commands if c.runs == 0 and c.command in KNOWN_COMMANDS]
@@ -897,9 +874,7 @@ class AnalysisOptimizationSkill(Skill):
             out.recommendations.append(
                 Recommendation(
                     title=f"Candidat au retrait : Skill {name}",
-                    rationale=(
-                        f"Jamais exécutée sur {total_runs} exécutions de Skills : utilité non démontrée."
-                    ),
+                    rationale=(f"Jamais exécutée sur {total_runs} exécutions de Skills : utilité non démontrée."),
                     impact=2,
                     effort=2,
                     confidence=0.5,

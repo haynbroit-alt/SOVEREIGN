@@ -16,9 +16,7 @@ DIMENSIONS = {"techno": ["IA", "IoT"], "marché": ["PME", "santé"], "modèle": 
 
 
 def test_morphological_exploration_excludes_incompatible(kernel):
-    out = kernel.run_skill(
-        SKILL, "explore_concepts", {"dimensions": DIMENSIONS, "incompatible": [["IoT", "usage"]]}
-    )
+    out = kernel.run_skill(SKILL, "explore_concepts", {"dimensions": DIMENSIONS, "incompatible": [["IoT", "usage"]]})
     assert out.total_combinations == 8
     assert out.excluded_incompatible == 2
     assert len(out.concepts) == 6 and not out.sampled
@@ -60,9 +58,7 @@ def test_need_coverage_and_sampling(kernel):
     best = out.concepts[0]
     assert best.components["fonction"] == "facturation automatique" and best.need_coverage == 1.0
     big = {d: [f"{d}{i}" for i in range(10)] for d in ("a", "b", "c")}
-    sampled = kernel.run_skill(
-        SKILL, "explore_concepts", {"dimensions": big, "max_combinations": 100, "top": 5}
-    )
+    sampled = kernel.run_skill(SKILL, "explore_concepts", {"dimensions": big, "max_combinations": 100, "top": 5})
     assert sampled.total_combinations == 1000 and sampled.sampled and sampled.evaluated == 100
 
 
@@ -149,20 +145,14 @@ def test_white_spaces_distinguish_us_competitors_nobody(kernel):
         1,
     )
     first, second = out.white_spaces
-    assert (
-        first.need == "conformité RGPD"
-        and first.coverage == "personne"
-        and first.weight == pytest.approx(0.15)
-    )
+    assert first.need == "conformité RGPD" and first.coverage == "personne" and first.weight == pytest.approx(0.15)
     assert second.coverage == "concurrents seulement" and second.weight == pytest.approx(0.12)
     assert out.metrics["innovation.coverage_ratio"] == pytest.approx(1 / 3, abs=1e-4)
     assert len(out.recommendations) == 2
 
 
 def test_combine_technologies_skips_existing_pairs(kernel):
-    kernel.store.put(
-        "offering", "o1", {"id": "o1", "name": "OCR+IA", "segment": "PME", "technologies": ["IA", "OCR"]}
-    )
+    kernel.store.put("offering", "o1", {"id": "o1", "name": "OCR+IA", "segment": "PME", "technologies": ["IA", "OCR"]})
     out = kernel.run_skill(
         SKILL,
         "combine_technologies",
@@ -171,9 +161,7 @@ def test_combine_technologies_skips_existing_pairs(kernel):
     assert (out.candidates, out.already_combined, len(out.combinations)) == (3, 1, 2)
     assert all(c.novelty == pytest.approx(0.75) for c in out.combinations)
     assert out.combinations[0].score == pytest.approx(0.675)
-    trio = kernel.run_skill(
-        SKILL, "combine_technologies", {"technologies": ["IA", "OCR", "Blockchain"], "max_size": 3}
-    )
+    trio = kernel.run_skill(SKILL, "combine_technologies", {"technologies": ["IA", "OCR", "Blockchain"], "max_size": 3})
     assert trio.candidates == 4
     assert any(c.novelty == pytest.approx(0.6667, abs=1e-4) for c in trio.combinations)
     lonely = kernel.run_skill(SKILL, "combine_technologies", {"technologies": ["IA"]})
@@ -225,9 +213,7 @@ def test_feasibility_telos_scores(funded):
 
 def test_feasibility_potential_unknown_capabilities_and_persist(funded):
     funded.store.put("idea", "i1", IDEAS[0])
-    out = funded.run_skill(
-        SKILL, "evaluate_feasibility", {"potential_values": {"i1": "1200"}, "persist": True}
-    )
+    out = funded.run_skill(SKILL, "evaluate_feasibility", {"potential_values": {"i1": "1200"}, "persist": True})
     result = out.evaluations[0]
     assert result.economic == pytest.approx(0.8 ** (1 / 3), abs=1e-4)  # retour 4× ⇒ facteur plafonné à 1
     assert result.operational == 0.6 and not out.capabilities_known
@@ -249,7 +235,5 @@ def test_assess_empty_then_full(funded):
     out = funded.run_skill(SKILL, "assess")
     assert (out.spaces, out.ideas, out.white_spaces) == (1, 1, 1)
     assert out.concepts == 5
-    assert {"innovation.white_spaces", "innovation.ideas_go", "innovation.tech_combinations"} <= set(
-        out.metrics
-    )
+    assert {"innovation.white_spaces", "innovation.ideas_go", "innovation.tech_combinations"} <= set(out.metrics)
     assert out.recommendations and all(r.skill == SKILL for r in out.recommendations)

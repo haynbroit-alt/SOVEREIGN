@@ -1,7 +1,7 @@
 """Façade applicative : noyau + cerveau + automatisations + commandes.
 
-    app = Sovereign.open()          # ~/.sovereign (ou SOVEREIGN_HOME)
-    app.commands.run("/director Que faire cette semaine ?")
+app = Sovereign.open()          # ~/.sovereign (ou SOVEREIGN_HOME)
+app.commands.run("/director Que faire cette semaine ?")
 """
 
 from __future__ import annotations

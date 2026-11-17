@@ -36,24 +36,39 @@ class Worker:
 
     def _skill_run(self, task: Task) -> Any:
         payload = task.payload
-        out = self.app.kernel.run_skill(payload["skill"], payload["action"], payload.get("input") or {},
-                                        mission_id=payload.get("mission_id"), caller="worker")
-        return {"summary": out.summary, "insights": len(out.insights), "recommendations": len(out.recommendations)}
+        out = self.app.kernel.run_skill(
+            payload["skill"],
+            payload["action"],
+            payload.get("input") or {},
+            mission_id=payload.get("mission_id"),
+            caller="worker",
+        )
+        return {
+            "summary": out.summary,
+            "insights": len(out.insights),
+            "recommendations": len(out.recommendations),
+        }
 
     def _cycle_run(self, task: Task) -> Any:
         return self.app.cycles.run(task.payload["cycle"], task_id=task.id, force=task.payload.get("force", False))
 
     def _director_mission(self, task: Task) -> Any:
         payload = task.payload
-        report = self.app.director.run(payload.get("mission", "Analyse de situation"),
-                                       events=payload.get("events"), mode=payload.get("mode", "event"),
-                                       deep=payload.get("deep", False))
+        report = self.app.director.run(
+            payload.get("mission", "Analyse de situation"),
+            events=payload.get("events"),
+            mode=payload.get("mode", "event"),
+            deep=payload.get("deep", False),
+        )
         return {"summary": report.summary, "report_id": report.report_id}
 
     def _notify(self, task: Task) -> Any:
         payload = task.payload
-        return {"sent": self.app.notifier.send(payload["title"], payload.get("text", ""), payload.get("data"),
-                                               payload.get("level", "info"))}
+        return {
+            "sent": self.app.notifier.send(
+                payload["title"], payload.get("text", ""), payload.get("data"), payload.get("level", "info")
+            )
+        }
 
     def run_once(self, max_tasks: int = 100) -> int:
         """Traite les tâches prêtes (pour cron / GitHub Actions). Retourne le nombre de tâches traitées."""
@@ -75,8 +90,11 @@ class Worker:
                     log.exception("tâche %s en échec", task.id)
                     failed = self.app.queue.fail(task.id, f"{type(exc).__name__}: {exc}")
                     if failed.status == "dead":
-                        self.app.kernel.events.publish("task.dead", {"task_id": task.id, "kind": task.kind,
-                                                                     "error": failed.error}, source="worker")
+                        self.app.kernel.events.publish(
+                            "task.dead",
+                            {"task_id": task.id, "kind": task.kind, "error": failed.error},
+                            source="worker",
+                        )
                     continue
             self.app.queue.complete(task.id, result)
         return processed

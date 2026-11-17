@@ -30,8 +30,13 @@ MISSIONS = {
 CYCLE_SKILLS = {
     "daily": ["finance-budget", "analysis-optimization", "intelligent-management", "watch-anticipation"],
     "weekly": ["memory-learning", "analysis-optimization", "marketing-strategy", "watch-anticipation"],
-    "monthly": ["finance-budget", "business-intelligence", "marketing-strategy", "business-development",
-                "innovation-creativity"],
+    "monthly": [
+        "finance-budget",
+        "business-intelligence",
+        "marketing-strategy",
+        "business-development",
+        "innovation-creativity",
+    ],
 }
 
 
@@ -60,8 +65,13 @@ class CycleRunner:
         period = period_key(cycle, now)
         existing = kernel.db.one("SELECT * FROM cycle_runs WHERE cycle = ? AND period = ?", (cycle, period))
         if existing is not None and existing["status"] == "succeeded" and not force:
-            return {"cycle": cycle, "period": period, "status": "skipped", "reason": "déjà exécuté pour la période",
-                    "report_id": existing["report_id"]}
+            return {
+                "cycle": cycle,
+                "period": period,
+                "status": "skipped",
+                "reason": "déjà exécuté pour la période",
+                "report_id": existing["report_id"],
+            }
         step_owner = task_id or new_id("cyc")
         kernel.db.execute(
             """INSERT INTO cycle_runs(cycle, period, status, started_at, task_id) VALUES (?, ?, 'running', ?, ?)
@@ -76,27 +86,64 @@ class CycleRunner:
             if cycle == "weekly":
                 queue.step(step_owner, "assign_missions", self._assign_missions)
             summary = queue.step(step_owner, "director", lambda: self._director(cycle))
-            queue.step(step_owner, "notify", lambda: {"sent": self.app.notifier.send(
-                f"{LABELS[cycle]} {period}", summary["summary"], {"report_id": summary["report_id"]})})
+            queue.step(
+                step_owner,
+                "notify",
+                lambda: {
+                    "sent": self.app.notifier.send(
+                        f"{LABELS[cycle]} {period}", summary["summary"], {"report_id": summary["report_id"]}
+                    )
+                },
+            )
         except Exception:
-            kernel.db.execute("UPDATE cycle_runs SET status = 'failed', finished_at = ? WHERE cycle = ? AND period = ?",
-                              (iso(kernel.clock.now()), cycle, period))
+            kernel.db.execute(
+                "UPDATE cycle_runs SET status = 'failed', finished_at = ? WHERE cycle = ? AND period = ?",
+                (iso(kernel.clock.now()), cycle, period),
+            )
             raise
         kernel.db.execute(
             "UPDATE cycle_runs SET status = 'succeeded', finished_at = ?, report_id = ? WHERE cycle = ? AND period = ?",
             (iso(kernel.clock.now()), summary["report_id"], cycle, period),
         )
-        kernel.events.publish(f"cycle.{cycle}", {"period": period, "report_id": summary["report_id"]},
-                              source="scheduler", dedup_key=f"cycle:{cycle}:{period}:{summary['report_id']}")
-        return {"cycle": cycle, "period": period, "status": "succeeded", "report_id": summary["report_id"],
-                "summary": summary["summary"]}
+        kernel.events.publish(
+            f"cycle.{cycle}",
+            {"period": period, "report_id": summary["report_id"]},
+            source="scheduler",
+            dedup_key=f"cycle:{cycle}:{period}:{summary['report_id']}",
+        )
+        return {
+            "cycle": cycle,
+            "period": period,
+            "status": "succeeded",
+            "report_id": summary["report_id"],
+            "summary": summary["summary"],
+        }
 
     def _director(self, cycle: str) -> dict[str, Any]:
         report = self.app.director.run(
-            MISSIONS[cycle], skills=self._skills(cycle), mode=cycle, deep=cycle == "weekly",
+            MISSIONS[cycle],
+            skills=self._skills(cycle),
+            mode=cycle,
+            deep=cycle == "weekly",
             use_llm=self.app.kernel.settings.llm.allow_in_cycles,
         )
-        return {"report_id": report.report_id, "summary": report.summary}
+        path = self._write_report_file(cycle, report.report_id)
+        return {"report_id": report.report_id, "summary": report.summary, "path": path}
+
+    def _write_report_file(self, cycle: str, report_id: str | None) -> str | None:
+        """Les rapports de cycle sont aussi écrits en Markdown (consultables hors base, artefacts CI)."""
+
+        kernel = self.app.kernel
+        if kernel.db.path == ":memory:" or report_id is None:
+            return None
+        row = kernel.db.one("SELECT content_md FROM reports WHERE id = ?", (report_id,))
+        if row is None:
+            return None
+        directory = kernel.settings.reports_path
+        directory.mkdir(parents=True, exist_ok=True)
+        file = directory / f"{kernel.clock.now():%Y-%m-%d}-cycle-{cycle}-{report_id[-8:]}.md"
+        file.write_text(row["content_md"], encoding="utf-8")
+        return str(file)
 
     def _renew_recurring(self) -> dict[str, Any]:
         """Les dépenses récurrentes repassent par le garde-fou chaque mois (jamais d'engagement implicite)."""
@@ -113,9 +160,12 @@ class CycleRunner:
             if expense.created_at.strftime("%Y-%m") == month:
                 continue
             decision = finance.request_expense(
-                expense.actual or expense.amount, expense.category, vendor=expense.vendor,
+                expense.actual or expense.amount,
+                expense.category,
+                vendor=expense.vendor,
                 description=f"Renouvellement {month} : {expense.description or expense.category}",
-                recurring="monthly", requested_by="cycle.monthly",
+                recurring="monthly",
+                requested_by="cycle.monthly",
                 reference=f"renew:{expense.category}:{expense.vendor}:{month}",
             )
             renewed.append({"category": expense.category, "status": decision.expense.status})

@@ -110,10 +110,18 @@ def load_manifest(directory: Path) -> SkillManifest:
     if not module.startswith("sovereign.skills."):
         raise SkillError(f"{directory} : metadata.module doit pointer vers sovereign.skills.*")
     return SkillManifest(
-        name=name, description=description, version=meta.get("version", "0.0.0"), module=module,
-        keywords=_csv(meta.get("keywords")), events=_csv(meta.get("events")), actions=_csv(meta.get("actions")),
-        data=_csv(meta.get("data")), risk=meta.get("risk", "read_only"), path=directory,
-        license=front.get("license"), body=body,
+        name=name,
+        description=description,
+        version=meta.get("version", "0.0.0"),
+        module=module,
+        keywords=_csv(meta.get("keywords")),
+        events=_csv(meta.get("events")),
+        actions=_csv(meta.get("actions")),
+        data=_csv(meta.get("data")),
+        risk=meta.get("risk", "read_only"),
+        path=directory,
+        license=front.get("license"),
+        body=body,
     )
 
 
@@ -200,7 +208,8 @@ class SkillRegistry:
             score = 0.0
             reasons: list[str] = []
             matched = [
-                kw for kw, kw_stems in zip(manifest.keywords, manifest.keyword_stems(), strict=False)
+                kw
+                for kw, kw_stems in zip(manifest.keywords, manifest.keyword_stems(), strict=False)
                 if kw_stems and kw_stems <= text_stems
             ]
             if matched:

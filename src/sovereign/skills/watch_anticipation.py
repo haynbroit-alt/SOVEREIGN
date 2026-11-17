@@ -403,7 +403,7 @@ def parse_feed(text: str, use_feedparser: bool = True) -> list[dict[str, Any]]:
                 for key in ("published_parsed", "updated_parsed"):
                     value = entry.get(key)
                     if value:
-                        published = datetime(*value[:6], tzinfo=UTC)
+                        published = datetime(value[0], value[1], value[2], value[3], value[4], value[5], tzinfo=UTC)
                         break
                 items.append(
                     {
@@ -479,9 +479,7 @@ class WatchAnticipationSkill(Skill):
         return series
 
     def _store_signal(self, ctx: SkillContext, signal: SignalModel) -> tuple[str, bool]:
-        signal_id = (
-            signal.id or "sig_" + hashlib.sha256((signal.url or signal.title).encode()).hexdigest()[:16]
-        )
+        signal_id = signal.id or "sig_" + hashlib.sha256((signal.url or signal.title).encode()).hexdigest()[:16]
         if ctx.store.get("signal", signal_id) is not None:
             return signal_id, False
         record = signal.model_copy(update={"id": signal_id})
@@ -602,10 +600,7 @@ class WatchAnticipationSkill(Skill):
                     kind="trend",
                     severity="info",
                     title=f"Tendance émergente : {trend.term}",
-                    detail=(
-                        f"{trend.recent} mention(s) récentes contre {trend.baseline} "
-                        f"en référence (z={trend.z})."
-                    ),
+                    detail=(f"{trend.recent} mention(s) récentes contre {trend.baseline} en référence (z={trend.z})."),
                     value=trend.z,
                 )
             )
@@ -643,9 +638,7 @@ class WatchAnticipationSkill(Skill):
             k = max(2, len(values) // 4)
             previous = values[-2 * k : -k]
             recent_mean, previous_mean = mean(values[-k:]), mean(previous) if previous else None
-            change = (
-                (recent_mean - previous_mean) / abs(previous_mean) if previous_mean not in (None, 0) else None
-            )
+            change = (recent_mean - previous_mean) / abs(previous_mean) if previous_mean not in (None, 0) else None
             results.append(
                 SeriesChange(
                     metric=item.metric,
@@ -661,18 +654,18 @@ class WatchAnticipationSkill(Skill):
         out = MarketChangesOutput(series=results, summary="")
         flagged = [r for r in results if r.anomaly or r.change_index is not None]
         out.summary = f"{len(results)} série(s) analysée(s), {len(flagged)} en rupture ou anomalie."
-        for change in flagged:
-            what = "anomalie" if change.anomaly else "rupture"
+        for flagged_change in flagged:
+            what = "anomalie" if flagged_change.anomaly else "rupture"
             detail = (
-                f"Dernière valeur {change.last_value} (z robuste {change.robust_z})"
+                f"Dernière valeur {flagged_change.last_value} (z robuste {flagged_change.robust_z})"
                 + (
-                    f", rupture détectée au point {change.change_index} ({change.change_at})"
-                    if change.change_index is not None
+                    f", rupture détectée au point {flagged_change.change_index} ({flagged_change.change_at})"
+                    if flagged_change.change_index is not None
                     else ""
                 )
                 + (
-                    f", variation récente {change.recent_change:+.1%}"
-                    if change.recent_change is not None
+                    f", variation récente {flagged_change.recent_change:+.1%}"
+                    if flagged_change.recent_change is not None
                     else ""
                 )
                 + "."
@@ -680,21 +673,21 @@ class WatchAnticipationSkill(Skill):
             out.insights.append(
                 Insight(
                     kind="anomaly",
-                    severity="warning" if not change.anomaly else "critical",
-                    title=f"{what.capitalize()} sur {change.metric}",
+                    severity="warning" if not flagged_change.anomaly else "critical",
+                    title=f"{what.capitalize()} sur {flagged_change.metric}",
                     detail=detail,
-                    metric=change.metric,
-                    value=change.last_value,
+                    metric=flagged_change.metric,
+                    value=flagged_change.last_value,
                 )
             )
             out.recommendations.append(
                 Recommendation(
-                    title=f"Analyser la {what} de « {change.metric} »",
+                    title=f"Analyser la {what} de « {flagged_change.metric} »",
                     rationale=detail,
-                    impact=6 if change.anomaly else 5,
+                    impact=6 if flagged_change.anomaly else 5,
                     effort=2,
-                    confidence=0.75 if change.anomaly else 0.6,
-                    urgency=8 if change.anomaly else 6,
+                    confidence=0.75 if flagged_change.anomaly else 0.6,
+                    urgency=8 if flagged_change.anomaly else 6,
                     risk=0.1,
                     tags=["veille", "marché"],
                     evidence=[detail],
@@ -710,9 +703,7 @@ class WatchAnticipationSkill(Skill):
         factor = {"rising": 1.2, "stable": 1.0, "falling": 0.8}
         assessed: list[RiskAssessment] = []
         for risk in risks:
-            score = (
-                risk.probability * risk.impact * (1 + (risk.velocity - 5) / 10) * factor[risk.indicator_trend]
-            )
+            score = risk.probability * risk.impact * (1 + (risk.velocity - 5) / 10) * factor[risk.indicator_trend]
             level: Literal["critique", "élevé", "moyen", "faible"] = (
                 "critique" if score >= 6 else "élevé" if score >= 4 else "moyen" if score >= 2 else "faible"
             )
@@ -742,41 +733,37 @@ class WatchAnticipationSkill(Skill):
         if assessed:
             out.metrics["risk.top_score"] = assessed[0].score
             out.metrics["risk.critical_count"] = float(heatmap.get("critique", 0))
-        for risk in assessed:
-            if risk.level in ("critique", "élevé"):
+        for assessed_risk in assessed:
+            if assessed_risk.level in ("critique", "élevé"):
                 out.insights.append(
                     Insight(
                         kind="risk",
-                        severity="critical" if risk.level == "critique" else "warning",
-                        title=f"Risque {risk.level} : {risk.title}",
-                        detail=f"Score {risk.score} ({risk.category}).",
-                        value=risk.score,
+                        severity="critical" if assessed_risk.level == "critique" else "warning",
+                        title=f"Risque {assessed_risk.level} : {assessed_risk.title}",
+                        detail=f"Score {assessed_risk.score} ({assessed_risk.category}).",
+                        value=assessed_risk.score,
                     )
                 )
-            if risk.level == "critique":
+            if assessed_risk.level == "critique":
                 out.recommendations.append(
                     Recommendation(
-                        title=f"Traiter le risque « {risk.title} »",
-                        rationale=risk.mitigation,
-                        impact=min(10.0, risk.score),
+                        title=f"Traiter le risque « {assessed_risk.title} »",
+                        rationale=assessed_risk.mitigation,
+                        impact=min(10.0, assessed_risk.score),
                         effort=4,
                         confidence=0.7,
-                        urgency=min(10.0, 2 + risk.score),
+                        urgency=min(10.0, 2 + assessed_risk.score),
                         risk=0.1,
-                        tags=["risque", risk.category],
-                        evidence=[f"score={risk.score}"],
+                        tags=["risque", assessed_risk.category],
+                        evidence=[f"score={assessed_risk.score}"],
                     )
                 )
         return out
 
-    @action(
-        "Vérifier les versions des technologies suivies (PyPI / npm) : retard et maintenance", risk="write"
-    )
+    @action("Vérifier les versions des technologies suivies (PyPI / npm) : retard et maintenance", risk="write")
     def check_technologies(self, ctx: SkillContext, data: TechCheckInput) -> TechCheckOutput:
         from_store = not data.dependencies
-        deps = data.dependencies or [
-            TechDependency.model_validate(d) for d in ctx.store.list("tech_dependency")
-        ]
+        deps = data.dependencies or [TechDependency.model_validate(d) for d in ctx.store.list("tech_dependency")]
         today = ctx.clock.now().date()
         results: list[DependencyStatus] = []
         for dep in deps:
@@ -838,41 +825,44 @@ class WatchAnticipationSkill(Skill):
         )
         out.metrics["tech.outdated"] = float(len(outdated))
         out.metrics["tech.stale"] = float(len(stale_items))
-        for dep in results:
-            if dep.status == "stale":
+        for dep_status in results:
+            if dep_status.status == "stale":
                 out.insights.append(
                     Insight(
                         kind="risk",
-                        severity="warning" if not dep.critical else "critical",
-                        title=f"Maintenance douteuse : {dep.name}",
-                        detail=f"Dernière version publiée il y a {dep.days_since_release} jours.",
+                        severity="warning" if not dep_status.critical else "critical",
+                        title=f"Maintenance douteuse : {dep_status.name}",
+                        detail=f"Dernière version publiée il y a {dep_status.days_since_release} jours.",
                     )
                 )
                 out.recommendations.append(
                     Recommendation(
-                        title=f"Évaluer une alternative maintenue à {dep.name}",
+                        title=f"Évaluer une alternative maintenue à {dep_status.name}",
                         rationale=(
-                            f"Aucune publication depuis {dep.days_since_release} jours : risque d'abandon."
+                            f"Aucune publication depuis {dep_status.days_since_release} jours : risque d'abandon."
                         ),
-                        impact=7 if dep.critical else 4,
+                        impact=7 if dep_status.critical else 4,
                         effort=5,
                         confidence=0.6,
-                        urgency=6 if dep.critical else 3,
+                        urgency=6 if dep_status.critical else 3,
                         risk=0.2,
                         tags=["technologie", "veille"],
                     )
                 )
-            elif dep.status == "outdated" and (dep.lag == "major" or dep.critical):
+            elif dep_status.status == "outdated" and (dep_status.lag == "major" or dep_status.critical):
                 out.recommendations.append(
                     Recommendation(
-                        title=f"Mettre à jour {dep.name} {dep.current_version} → {dep.latest_version}",
-                        rationale=f"Retard {dep.lag}"
-                        + (" sur une dépendance critique." if dep.critical else "."),
-                        impact=6 if dep.critical else 4,
-                        effort=4 if dep.lag == "major" else 2,
+                        title=(
+                            f"Mettre à jour {dep_status.name} {dep_status.current_version} "
+                            f"→ {dep_status.latest_version}"
+                        ),
+                        rationale=f"Retard {dep_status.lag}"
+                        + (" sur une dépendance critique." if dep_status.critical else "."),
+                        impact=6 if dep_status.critical else 4,
+                        effort=4 if dep_status.lag == "major" else 2,
                         confidence=0.7,
-                        urgency=7 if dep.critical else 4,
-                        risk=0.25 if dep.lag == "major" else 0.1,
+                        urgency=7 if dep_status.critical else 4,
+                        risk=0.25 if dep_status.lag == "major" else 0.1,
                         tags=["technologie", "maintenance"],
                     )
                 )
@@ -946,8 +936,7 @@ class WatchAnticipationSkill(Skill):
                             reason=f"Risque {risk.level} (score {risk.score}). Piste : {risk.mitigation}",
                             source="risque",
                             priority=10 if risk.level == "critique" else 7,
-                            suggested_deadline=today
-                            + (timedelta(days=7) if risk.level == "critique" else horizon / 2),
+                            suggested_deadline=today + (timedelta(days=7) if risk.level == "critique" else horizon / 2),
                         )
                     )
         signals = self._stored_signals(ctx)
@@ -970,8 +959,7 @@ class WatchAnticipationSkill(Skill):
                         AgendaItem(
                             title=f"Planifier la mise à niveau de {dep.name}",
                             reason=(
-                                f"Dépendance critique {dep.status} "
-                                f"({dep.current_version} → {dep.latest_version})."
+                                f"Dépendance critique {dep.status} ({dep.current_version} → {dep.latest_version})."
                             ),
                             source="technologie",
                             priority=6,

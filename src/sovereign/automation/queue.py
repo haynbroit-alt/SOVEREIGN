@@ -53,12 +53,20 @@ class TaskQueue:
 
     def _row(self, row: Any) -> Task:
         return Task(
-            id=row["id"], kind=row["kind"], payload=loads(row["payload"]), status=row["status"],
-            priority=row["priority"], attempts=row["attempts"], max_attempts=row["max_attempts"],
+            id=row["id"],
+            kind=row["kind"],
+            payload=loads(row["payload"]),
+            status=row["status"],
+            priority=row["priority"],
+            attempts=row["attempts"],
+            max_attempts=row["max_attempts"],
             run_after=parse_dt(row["run_after"]),
             lease_until=parse_dt(row["lease_until"]) if row["lease_until"] else None,
-            idempotency_key=row["idempotency_key"], result=loads(row["result"]), error=row["error"],
-            parent_id=row["parent_id"], created_at=parse_dt(row["created_at"]),
+            idempotency_key=row["idempotency_key"],
+            result=loads(row["result"]),
+            error=row["error"],
+            parent_id=row["parent_id"],
+            created_at=parse_dt(row["created_at"]),
             updated_at=parse_dt(row["updated_at"]),
         )
 
@@ -84,8 +92,18 @@ class TaskQueue:
                 """INSERT INTO tasks(id, kind, payload, status, priority, attempts, max_attempts, run_after,
                                      idempotency_key, parent_id, created_at, updated_at)
                    VALUES (?, ?, ?, 'queued', ?, 0, ?, ?, ?, ?, ?, ?)""",
-                (task_id, kind, dumps(payload or {}), priority, max_attempts, iso(run_after or now),
-                 idempotency_key, parent_id, iso(now), iso(now)),
+                (
+                    task_id,
+                    kind,
+                    dumps(payload or {}),
+                    priority,
+                    max_attempts,
+                    iso(run_after or now),
+                    idempotency_key,
+                    parent_id,
+                    iso(now),
+                    iso(now),
+                ),
             )
         return self.get(task_id)
 
@@ -138,7 +156,7 @@ class TaskQueue:
                 (error[:2000], iso(now), task_id),
             )
         else:
-            delay = min(3600, 5 * 2 ** task.attempts)
+            delay = min(3600, 5 * 2**task.attempts)
             self.db.execute(
                 """UPDATE tasks SET status = 'queued', error = ?, lease_until = NULL, run_after = ?, updated_at = ?
                    WHERE id = ?""",
@@ -160,13 +178,18 @@ class TaskQueue:
         return loads(dumps(output))
 
     def steps(self, task_id: str) -> list[str]:
-        return [r["step"] for r in self.db.query(
-            "SELECT step FROM task_steps WHERE task_id = ? ORDER BY completed_at, rowid", (task_id,))]
+        return [
+            r["step"]
+            for r in self.db.query(
+                "SELECT step FROM task_steps WHERE task_id = ? ORDER BY completed_at, rowid", (task_id,)
+            )
+        ]
 
     def list(self, status: str | None = None, limit: int = 100) -> list[Task]:
         if status:
-            rows = self.db.query("SELECT * FROM tasks WHERE status = ? ORDER BY created_at DESC LIMIT ?",
-                                 (status, limit))
+            rows = self.db.query(
+                "SELECT * FROM tasks WHERE status = ? ORDER BY created_at DESC LIMIT ?", (status, limit)
+            )
         else:
             rows = self.db.query("SELECT * FROM tasks ORDER BY created_at DESC LIMIT ?", (limit,))
         return [self._row(r) for r in rows]

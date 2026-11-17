@@ -103,9 +103,7 @@ class FinanceStatus(BaseModel):
 
 
 class FinanceLedger:
-    def __init__(
-        self, db: Database, clock: Clock, settings: FinanceSettings, events: EventBus | None = None
-    ) -> None:
+    def __init__(self, db: Database, clock: Clock, settings: FinanceSettings, events: EventBus | None = None) -> None:
         self.db = db
         self.clock = clock
         self.settings = settings
@@ -148,8 +146,18 @@ class FinanceLedger:
     ) -> LedgerEntry:
         """Enregistre un encaissement réel. Idempotent sur ``reference`` (ex. id de paiement Stripe)."""
 
-        return self._record("collection", amount, occurred_on, counterparty, description, reference, invoice_id,
-                            currency, source, actor)
+        return self._record(
+            "collection",
+            amount,
+            occurred_on,
+            counterparty,
+            description,
+            reference,
+            invoice_id,
+            currency,
+            source,
+            actor,
+        )
 
     def record_refund(
         self,
@@ -163,8 +171,9 @@ class FinanceLedger:
         source: str = "manual",
         actor: str = "human",
     ) -> LedgerEntry:
-        return self._record("refund", amount, occurred_on, counterparty, description, reference, None, currency,
-                            source, actor)
+        return self._record(
+            "refund", amount, occurred_on, counterparty, description, reference, None, currency, source, actor
+        )
 
     def _record(
         self,
@@ -199,24 +208,47 @@ class FinanceLedger:
                 """INSERT INTO ledger(id, entry_type, amount_cents, currency, occurred_on, counterparty, description,
                                       reference, invoice_id, source, created_at)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (entry_id, entry_type, to_cents(value), self.currency, day.isoformat(), counterparty, description,
-                 reference, invoice_id, source, iso(self.clock.now())),
+                (
+                    entry_id,
+                    entry_type,
+                    to_cents(value),
+                    self.currency,
+                    day.isoformat(),
+                    counterparty,
+                    description,
+                    reference,
+                    invoice_id,
+                    source,
+                    iso(self.clock.now()),
+                ),
             )
-            self._audit(actor, f"ledger.{entry_type}", "ledger", entry_id,
-                        {"amount": str(value), "reference": reference, "source": source})
+            self._audit(
+                actor,
+                f"ledger.{entry_type}",
+                "ledger",
+                entry_id,
+                {"amount": str(value), "reference": reference, "source": source},
+            )
             after = self._utilization()
         self._emit(f"finance.{entry_type}_recorded", {"entry_id": entry_id, "amount": str(value), "source": source})
         self._check_thresholds(before, after)
         row = self.db.one("SELECT * FROM ledger WHERE id = ?", (entry_id,))
-        assert row is not None
+        if row is None:  # pragma: no cover — impossible après un INSERT validé
+            raise FinanceError(f"écriture introuvable : {entry_id}")
         return self._entry(row)
 
     def _entry(self, row: Any) -> LedgerEntry:
         return LedgerEntry(
-            id=row["id"], entry_type=row["entry_type"], amount=from_cents(row["amount_cents"]),
-            currency=row["currency"], occurred_on=date.fromisoformat(row["occurred_on"]),
-            counterparty=row["counterparty"], description=row["description"], reference=row["reference"],
-            invoice_id=row["invoice_id"], source=row["source"],
+            id=row["id"],
+            entry_type=row["entry_type"],
+            amount=from_cents(row["amount_cents"]),
+            currency=row["currency"],
+            occurred_on=date.fromisoformat(row["occurred_on"]),
+            counterparty=row["counterparty"],
+            description=row["description"],
+            reference=row["reference"],
+            invoice_id=row["invoice_id"],
+            source=row["source"],
         )
 
     def entries(self, limit: int = 500) -> list[LedgerEntry]:
@@ -240,15 +272,24 @@ class FinanceLedger:
         return from_cents(int(cents or 0))
 
     # -- factures (créances : n'ouvrent AUCUN budget) ------------------------------------------
-    def issue_invoice(self, client: str, amount: Decimal | str | float, issued_on: date | str | None = None,
-                      due_on: date | str | None = None, description: str | None = None) -> Invoice:
+    def issue_invoice(
+        self,
+        client: str,
+        amount: Decimal | str | float,
+        issued_on: date | str | None = None,
+        due_on: date | str | None = None,
+        description: str | None = None,
+    ) -> Invoice:
         value = to_decimal(amount)
         if value <= 0:
             raise FinanceError("le montant doit être strictement positif")
         invoice = Invoice(
-            id=new_id("inv"), client=client, amount=value,
+            id=new_id("inv"),
+            client=client,
+            amount=value,
             issued_on=parse_dt(issued_on).date() if issued_on else self.clock.now().date(),
-            due_on=parse_dt(due_on).date() if due_on else None, description=description,
+            due_on=parse_dt(due_on).date() if due_on else None,
+            description=description,
         )
         self._save_invoice(invoice)
         self._audit("human", "invoice.issued", "invoice", invoice.id, {"amount": str(value), "client": client})
@@ -267,17 +308,26 @@ class FinanceLedger:
         items = [Invoice.model_validate_json(r["data"]) for r in rows]
         return [i for i in items if status is None or i.status == status]
 
-    def collect_invoice(self, invoice_id: str, amount: Decimal | str | float | None = None,
-                        occurred_on: date | str | None = None, actor: str = "human") -> LedgerEntry:
+    def collect_invoice(
+        self,
+        invoice_id: str,
+        amount: Decimal | str | float | None = None,
+        occurred_on: date | str | None = None,
+        actor: str = "human",
+    ) -> LedgerEntry:
         invoice = next((i for i in self.invoices() if i.id == invoice_id), None)
         if invoice is None:
             raise FinanceError(f"facture inconnue : {invoice_id}")
         if invoice.status != "open":
             raise FinanceError(f"facture {invoice_id} déjà {invoice.status}")
         entry = self.record_collection(
-            amount if amount is not None else invoice.amount, occurred_on, counterparty=invoice.client,
-            description=f"Encaissement facture {invoice.id}", reference=f"invoice:{invoice.id}",
-            invoice_id=invoice.id, actor=actor,
+            amount if amount is not None else invoice.amount,
+            occurred_on,
+            counterparty=invoice.client,
+            description=f"Encaissement facture {invoice.id}",
+            reference=f"invoice:{invoice.id}",
+            invoice_id=invoice.id,
+            actor=actor,
         )
         invoice.status = "collected"
         invoice.collected_entry_id = entry.id
@@ -292,7 +342,8 @@ class FinanceLedger:
                  COALESCE(SUM(CASE WHEN status = 'spent' THEN COALESCE(actual_cents, amount_cents) END), 0) AS spent
                FROM expenses"""
         )
-        assert row is not None
+        if row is None:  # pragma: no cover — une agrégation SQL renvoie toujours une ligne
+            raise FinanceError("agrégation des dépenses impossible")
         return int(row["approved"]), int(row["spent"])
 
     def envelope(self) -> Decimal:
@@ -350,22 +401,32 @@ class FinanceLedger:
                     expense = self._expense(existing)
                     available = self.available()
                     return ExpenseDecision(
-                        expense=expense, approved=expense.status in ("approved", "spent"),
-                        needs_review=expense.status == "review", available_before=available,
-                        available_after=available, message="Demande déjà enregistrée (référence identique).",
+                        expense=expense,
+                        approved=expense.status in ("approved", "spent"),
+                        needs_review=expense.status == "review",
+                        available_before=available,
+                        available_after=available,
+                        message="Demande déjà enregistrée (référence identique).",
                     )
             before_util = self._utilization()
             available = self.available()
             if available <= 0:
-                status, reason = "rejected", "Aucun budget disponible : l'enveloppe de 10 % des encaissements est épuisée."
+                status, reason = (
+                    "rejected",
+                    "Aucun budget disponible : l'enveloppe de 10 % des encaissements est épuisée.",
+                )
             elif value > available:
-                status, reason = "rejected", (
-                    f"Dépassement refusé : {value} demandés pour {available} disponibles (10 % des encaissements)."
+                status, reason = (
+                    "rejected",
+                    (f"Dépassement refusé : {value} demandés pour {available} disponibles (10 % des encaissements)."),
                 )
             elif value > available * self.settings.review_threshold_share:
-                status, reason = "review", (
-                    f"Dépense importante ({value} > {int(self.settings.review_threshold_share * 100)} % du "
-                    f"disponible {available}) : validation humaine requise."
+                status, reason = (
+                    "review",
+                    (
+                        f"Dépense importante ({value} > {int(self.settings.review_threshold_share * 100)} % du "
+                        f"disponible {available}) : validation humaine requise."
+                    ),
                 )
             else:
                 status, reason = "approved", "Dans l'enveloppe autorisée."
@@ -375,21 +436,46 @@ class FinanceLedger:
                 """INSERT INTO expenses(id, amount_cents, currency, category, vendor, description, recurring, status,
                                         decision_reason, requested_by, reference, created_at, decided_at)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (expense_id, to_cents(value), self.currency, category, vendor, description, recurring, status, reason,
-                 requested_by, reference, now, now if status != "review" else None),
+                (
+                    expense_id,
+                    to_cents(value),
+                    self.currency,
+                    category,
+                    vendor,
+                    description,
+                    recurring,
+                    status,
+                    reason,
+                    requested_by,
+                    reference,
+                    now,
+                    now if status != "review" else None,
+                ),
             )
-            self._audit(requested_by, f"expense.{status}", "expense", expense_id,
-                        {"amount": str(value), "category": category, "reason": reason})
+            self._audit(
+                requested_by,
+                f"expense.{status}",
+                "expense",
+                expense_id,
+                {"amount": str(value), "category": category, "reason": reason},
+            )
             after_available = self.available()
             after_util = self._utilization()
         expense = self.get_expense(expense_id)
         self._emit(f"expense.{status}", {"expense_id": expense_id, "amount": str(value), "category": category})
         self._check_thresholds(before_util, after_util)
         return ExpenseDecision(
-            expense=expense, approved=status == "approved", needs_review=status == "review",
-            available_before=available, available_after=after_available,
-            message=reason + (" Paiement à effectuer manuellement : SOVEREIGN n'a aucun accès bancaire."
-                              if status == "approved" else ""),
+            expense=expense,
+            approved=status == "approved",
+            needs_review=status == "review",
+            available_before=available,
+            available_after=after_available,
+            message=reason
+            + (
+                " Paiement à effectuer manuellement : SOVEREIGN n'a aucun accès bancaire."
+                if status == "approved"
+                else ""
+            ),
         )
 
     def decide_review(self, expense_id: str, approve: bool, actor: str, reason: str | None = None) -> Expense:
@@ -415,8 +501,9 @@ class FinanceLedger:
         self._check_thresholds(before_util, after_util)
         return self.get_expense(expense_id)
 
-    def confirm_spent(self, expense_id: str, actual: Decimal | str | float | None = None,
-                      actor: str = "human") -> Expense:
+    def confirm_spent(
+        self, expense_id: str, actual: Decimal | str | float | None = None, actor: str = "human"
+    ) -> Expense:
         """Déclare qu'une dépense approuvée a été réglée (par l'humain). Le réel ne peut excéder l'approuvé."""
 
         with self.db.transaction():
@@ -456,11 +543,18 @@ class FinanceLedger:
 
     def _expense(self, row: Any) -> Expense:
         return Expense(
-            id=row["id"], amount=from_cents(row["amount_cents"]),
+            id=row["id"],
+            amount=from_cents(row["amount_cents"]),
             actual=from_cents(row["actual_cents"]) if row["actual_cents"] is not None else None,
-            currency=row["currency"], category=row["category"], vendor=row["vendor"],
-            description=row["description"], recurring=row["recurring"], status=row["status"],
-            decision_reason=row["decision_reason"], requested_by=row["requested_by"], reference=row["reference"],
+            currency=row["currency"],
+            category=row["category"],
+            vendor=row["vendor"],
+            description=row["description"],
+            recurring=row["recurring"],
+            status=row["status"],
+            decision_reason=row["decision_reason"],
+            requested_by=row["requested_by"],
+            reference=row["reference"],
             created_at=parse_dt(row["created_at"]),
             decided_at=parse_dt(row["decided_at"]) if row["decided_at"] else None,
             spent_at=parse_dt(row["spent_at"]) if row["spent_at"] else None,
@@ -468,8 +562,9 @@ class FinanceLedger:
 
     def expenses(self, status: str | None = None, limit: int = 500) -> list[Expense]:
         if status:
-            rows = self.db.query("SELECT * FROM expenses WHERE status = ? ORDER BY created_at DESC LIMIT ?",
-                                 (status, limit))
+            rows = self.db.query(
+                "SELECT * FROM expenses WHERE status = ? ORDER BY created_at DESC LIMIT ?", (status, limit)
+            )
         else:
             rows = self.db.query("SELECT * FROM expenses ORDER BY created_at DESC LIMIT ?", (limit,))
         return [self._expense(r) for r in rows]
@@ -517,8 +612,17 @@ class FinanceLedger:
         if pending:
             alerts.append(f"{pending} dépense(s) en attente de validation humaine.")
         return FinanceStatus(
-            currency=self.currency, spend_ratio=self.settings.spend_ratio, collected_total=self.collected_total(),
-            envelope=envelope, committed=from_cents(approved), spent=from_cents(spent), available=available,
-            utilization=round(utilization, 4), overdrawn=available < 0, pending_review=pending,
-            receivables=to_decimal(receivables), receivables_count=len(open_invoices), alerts=alerts,
+            currency=self.currency,
+            spend_ratio=self.settings.spend_ratio,
+            collected_total=self.collected_total(),
+            envelope=envelope,
+            committed=from_cents(approved),
+            spent=from_cents(spent),
+            available=available,
+            utilization=round(utilization, 4),
+            overdrawn=available < 0,
+            pending_review=pending,
+            receivables=to_decimal(receivables),
+            receivables_count=len(open_invoices),
+            alerts=alerts,
         )

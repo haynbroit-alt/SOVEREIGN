@@ -117,9 +117,7 @@ class Asset(BaseModel):
 
 # -- Évaluation des modèles économiques ------------------------------------------------------------
 class ModelsInput(BaseModel):
-    models: list[BusinessModel] = Field(
-        default_factory=list, description="Vide ⇒ « business_model » du store"
-    )
+    models: list[BusinessModel] = Field(default_factory=list, description="Vide ⇒ « business_model » du store")
 
 
 class StreamEconomics(BaseModel):
@@ -170,9 +168,7 @@ class StreamsOutput(SkillOutput):
 
 # -- Classement des opportunités ---------------------------------------------------------------------
 class RankInput(BaseModel):
-    opportunities: list[Opportunity] = Field(
-        default_factory=list, description="Vide ⇒ « opportunity » du store"
-    )
+    opportunities: list[Opportunity] = Field(default_factory=list, description="Vide ⇒ « opportunity » du store")
     include_rejected: bool = False
 
 
@@ -199,9 +195,7 @@ class RankOutput(SkillOutput):
 class ActivitiesInput(BaseModel):
     assets: list[Asset] = Field(default_factory=list, description="Vide ⇒ « asset » du store")
     current_markets: list[str] = Field(default_factory=list, description="Vide ⇒ marchés / segments du store")
-    new_markets: list[str] = Field(
-        default_factory=list, description="Vide ⇒ segments des besoins non couverts"
-    )
+    new_markets: list[str] = Field(default_factory=list, description="Vide ⇒ segments des besoins non couverts")
     per_quadrant: int = Field(4, ge=1, le=10)
 
 
@@ -305,9 +299,7 @@ class BusinessDevelopmentSkill(Skill):
     def _assets(ctx: SkillContext, given: list[Asset]) -> list[Asset]:
         return given or [Asset.model_validate(a) for a in ctx.store.list("asset")]
 
-    @action(
-        "Synthèse développement commercial : modèles économiques, opportunités, actifs (pour le directeur)"
-    )
+    @action("Synthèse développement commercial : modèles économiques, opportunités, actifs (pour le directeur)")
     def assess(self, ctx: SkillContext, data: EmptyInput) -> AssessOutput:
         models = self._models(ctx, [])
         opportunities = self._opportunities(ctx, [])
@@ -362,10 +354,7 @@ class BusinessDevelopmentSkill(Skill):
                 weight = sum(float(s.price) * s.volume_per_month for s in recurring)
                 if weight > 0:
                     unit_monthly = (
-                        sum(
-                            float(s.price) * s.gross_margin * float(s.price) * s.volume_per_month
-                            for s in recurring
-                        )
+                        sum(float(s.price) * s.gross_margin * float(s.price) * s.volume_per_month for s in recurring)
                         / weight
                     )
                 else:
@@ -461,9 +450,7 @@ class BusinessDevelopmentSkill(Skill):
                         risk=0.15,
                         tags=["modèle économique", "cac"],
                         evidence=[f"LTV={e.ltv}", f"CAC={e.cac}"],
-                        follow_up=FollowUp(
-                            skill="marketing-strategy", action="measure_campaigns", payload={}
-                        ),
+                        follow_up=FollowUp(skill="marketing-strategy", action="measure_campaigns", payload={}),
                     )
                 )
             if e.operating_result_monthly < 0 and e.break_even_volume is not None:
@@ -493,9 +480,7 @@ class BusinessDevelopmentSkill(Skill):
             (m.name, s, _stream_economics(s)) for m in models for s in m.revenue_streams
         ]
         if not rows:
-            return StreamsOutput(
-                streams=[], summary="Aucune source de revenus : renseignez des « business_model »."
-            )
+            return StreamsOutput(streams=[], summary="Aucune source de revenus : renseignez des « business_model ».")
         best = max((float(e.monthly_contribution) for _, _, e in rows), default=0.0)
         scored: list[StreamScore] = []
         for model_name, stream, eco in rows:
@@ -521,10 +506,7 @@ class BusinessDevelopmentSkill(Skill):
         total = sum((s.monthly_contribution for s in scored), Decimal("0"))
         out = StreamsOutput(
             streams=scored,
-            summary=(
-                f"{len(scored)} source(s) de revenus ; la plus solide : « {top.name} » "
-                f"(score {top.score:.2f})."
-            ),
+            summary=(f"{len(scored)} source(s) de revenus ; la plus solide : « {top.name} » (score {top.score:.2f})."),
         )
         share = float(top.monthly_contribution / total) if total > 0 else 0.0
         if len(scored) > 1 and share >= 0.7:
@@ -543,8 +525,7 @@ class BusinessDevelopmentSkill(Skill):
                 Recommendation(
                     title=f"Transformer « {weak[0].name} » en revenu récurrent",
                     rationale=(
-                        "Flux ponctuel à faible marge : un abonnement ou un forfait améliore "
-                        "prévisibilité et marge."
+                        "Flux ponctuel à faible marge : un abonnement ou un forfait améliore prévisibilité et marge."
                     ),
                     impact=5,
                     effort=5,
@@ -559,14 +540,10 @@ class BusinessDevelopmentSkill(Skill):
     @action("Classer les opportunités (RICE pondéré par la cohérence stratégique avec nos actifs)")
     def rank_opportunities(self, ctx: SkillContext, data: RankInput) -> RankOutput:
         opportunities = [
-            o
-            for o in self._opportunities(ctx, data.opportunities)
-            if data.include_rejected or o.status != "rejected"
+            o for o in self._opportunities(ctx, data.opportunities) if data.include_rejected or o.status != "rejected"
         ]
         if not opportunities:
-            return RankOutput(
-                ranking=[], summary="Aucune opportunité à classer : lancez la détection d'opportunités."
-            )
+            return RankOutput(ranking=[], summary="Aucune opportunité à classer : lancez la détection d'opportunités.")
         assets = self._assets(ctx, [])
         asset_stems = [_stems(a.name) for a in assets]
         max_value = max((o.potential_value for o in opportunities), default=Decimal("0"))
@@ -612,10 +589,7 @@ class BusinessDevelopmentSkill(Skill):
         top = ranking[0]
         out = RankOutput(
             ranking=ranking,
-            summary=(
-                f"{len(ranking)} opportunité(s) classée(s) ; priorité : « {top.title} » "
-                f"(score {top.score:g})."
-            ),
+            summary=(f"{len(ranking)} opportunité(s) classée(s) ; priorité : « {top.title} » (score {top.score:g})."),
         )
         out.metrics = {"bizdev.top_opportunity_score": top.score, "bizdev.opportunities": float(len(ranking))}
         estimated = sum(1 for r in ranking if r.reach_estimated)
@@ -624,10 +598,7 @@ class BusinessDevelopmentSkill(Skill):
                 Insight(
                     kind="observation",
                     title=f"Portée estimée pour {estimated} opportunité(s)",
-                    detail=(
-                        "Portée par défaut de 100 clients : renseignez « reach » pour fiabiliser "
-                        "le classement."
-                    ),
+                    detail=("Portée par défaut de 100 clients : renseignez « reach » pour fiabiliser le classement."),
                 )
             )
         out.recommendations.append(
@@ -660,8 +631,7 @@ class BusinessDevelopmentSkill(Skill):
         if not assets:
             return ActivitiesOutput(
                 activities=[],
-                summary="Aucun actif : renseignez des « asset » (produits, "
-                "compétences, technologies, audiences).",
+                summary="Aucun actif : renseignez des « asset » (produits, compétences, technologies, audiences).",
             )
         current = data.current_markets or sorted(
             (
@@ -688,7 +658,7 @@ class BusinessDevelopmentSkill(Skill):
                         quadrant=quadrant,
                         title=title,
                         rationale=rationale,
-                        risk_level=risk,  # type: ignore[arg-type]
+                        risk_level=risk,
                         assets=used,
                     )
                 )
@@ -754,8 +724,7 @@ class BusinessDevelopmentSkill(Skill):
                 Recommendation(
                     title=f"Étudier la piste « {safest.title} »",
                     rationale=(
-                        f"Quadrant « {safest.quadrant} » (risque {safest.risk_level}/4) : "
-                        "s'appuie sur nos actifs."
+                        f"Quadrant « {safest.quadrant} » (risque {safest.risk_level}/4) : s'appuie sur nos actifs."
                     ),
                     impact=5,
                     effort=4,
@@ -777,9 +746,7 @@ class BusinessDevelopmentSkill(Skill):
         else:
             requested = available
         if requested <= 0:
-            raise SkillError(
-                "budget nul : indiquez un budget ou un potentiel, ou enregistrez des encaissements"
-            )
+            raise SkillError("budget nul : indiquez un budget ou un potentiel, ou enregistrez des encaissements")
         customers = data.target_customers
         weeks = [data.validation_weeks, data.mvp_weeks, data.launch_weeks, data.growth_weeks]
         criteria = {

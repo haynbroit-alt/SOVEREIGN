@@ -52,11 +52,16 @@ def handle_webhook(app: Sovereign, source: str, body: bytes, headers: Mapping[st
         lower = {k.lower(): v for k, v in headers.items()}
         return _github(app, lower.get("x-github-event", ""), lower.get("x-github-delivery"), data)
     event_type = str(data.get("type", "")).strip()
-    if not event_type or not all(part.isidentifier() or part.replace("-", "_").isidentifier()
-                                 for part in event_type.split(".")):
+    if not event_type or not all(
+        part.isidentifier() or part.replace("-", "_").isidentifier() for part in event_type.split(".")
+    ):
         raise WebhookError(400, "champ 'type' manquant ou invalide")
-    event = app.kernel.events.publish(event_type, data.get("payload") or {}, source=f"webhook:{source}",
-                                      dedup_key=f"{source}:{data['id']}" if data.get("id") else None)
+    event = app.kernel.events.publish(
+        event_type,
+        data.get("payload") or {},
+        source=f"webhook:{source}",
+        dedup_key=f"{source}:{data['id']}" if data.get("id") else None,
+    )
     return {"accepted": True, "duplicate": event is None, "event": event_type}
 
 
@@ -73,9 +78,14 @@ def _stripe(app: Sovereign, data: dict[str, Any]) -> dict[str, Any]:
         if amount is None:
             raise WebhookError(400, "montant absent")
         entry = finance.record_collection(
-            _cents_to_decimal(amount), created, counterparty=obj.get("customer"),
-            description=f"Stripe {event_type}", reference=f"stripe:{obj.get('id')}", currency=currency,
-            source="stripe", actor="webhook:stripe",
+            _cents_to_decimal(amount),
+            created,
+            counterparty=obj.get("customer"),
+            description=f"Stripe {event_type}",
+            reference=f"stripe:{obj.get('id')}",
+            currency=currency,
+            source="stripe",
+            actor="webhook:stripe",
         )
         return {"accepted": True, "ledger_entry": entry.id, "duplicate": entry.duplicate}
     if event_type == "charge.refunded":
@@ -83,9 +93,14 @@ def _stripe(app: Sovereign, data: dict[str, Any]) -> dict[str, Any]:
         if not amount:
             return {"accepted": True, "ignored": "remboursement nul"}
         entry = finance.record_refund(
-            _cents_to_decimal(amount), created, counterparty=obj.get("customer"),
-            description="Stripe charge.refunded", reference=f"stripe-refund:{obj.get('id')}", currency=currency,
-            source="stripe", actor="webhook:stripe",
+            _cents_to_decimal(amount),
+            created,
+            counterparty=obj.get("customer"),
+            description="Stripe charge.refunded",
+            reference=f"stripe-refund:{obj.get('id')}",
+            currency=currency,
+            source="stripe",
+            actor="webhook:stripe",
         )
         return {"accepted": True, "ledger_entry": entry.id, "duplicate": entry.duplicate}
     return {"accepted": True, "ignored": f"type Stripe non suivi : {event_type}"}
@@ -94,13 +109,24 @@ def _stripe(app: Sovereign, data: dict[str, Any]) -> dict[str, Any]:
 def _github(app: Sovereign, kind: str, delivery: str | None, data: dict[str, Any]) -> dict[str, Any]:
     if kind == "release" and data.get("action") == "published":
         release = data.get("release") or {}
-        event = app.kernel.events.publish("github.release", {
-            "repository": (data.get("repository") or {}).get("full_name"), "tag": release.get("tag_name"),
-            "url": release.get("html_url")}, source="webhook:github", dedup_key=f"github:{delivery}")
+        event = app.kernel.events.publish(
+            "github.release",
+            {
+                "repository": (data.get("repository") or {}).get("full_name"),
+                "tag": release.get("tag_name"),
+                "url": release.get("html_url"),
+            },
+            source="webhook:github",
+            dedup_key=f"github:{delivery}",
+        )
         return {"accepted": True, "event": "github.release", "duplicate": event is None}
     if kind == "workflow_run" and (data.get("workflow_run") or {}).get("conclusion") == "failure":
         run = data["workflow_run"]
-        event = app.kernel.events.publish("github.ci_failed", {"name": run.get("name"), "url": run.get("html_url")},
-                                          source="webhook:github", dedup_key=f"github:{delivery}")
+        event = app.kernel.events.publish(
+            "github.ci_failed",
+            {"name": run.get("name"), "url": run.get("html_url")},
+            source="webhook:github",
+            dedup_key=f"github:{delivery}",
+        )
         return {"accepted": True, "event": "github.ci_failed", "duplicate": event is None}
     return {"accepted": True, "ignored": f"événement GitHub non suivi : {kind}"}

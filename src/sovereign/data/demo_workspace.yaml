@@ -1,0 +1,305 @@
+# ESPACE DE DÉMONSTRATION — ENTREPRISE ET DONNÉES ENTIÈREMENT FICTIVES.
+# « Nova Atelier (démo) » : SaaS de devis et de planning pour artisans du bâtiment.
+# Toute ressemblance avec des entreprises existantes serait fortuite. Ces chiffres servent uniquement à
+# démontrer et tester SOVEREIGN ; remplacez-les par vos données réelles (sovereign data import).
+
+collections:
+  - {amount: "6200", date: 2026-05-08, counterparty: "Abonnements (démo)", reference: "demo-col-2026-05"}
+  - {amount: "6800", date: 2026-06-08, counterparty: "Abonnements (démo)", reference: "demo-col-2026-06"}
+  - {amount: "7100", date: 2026-07-08, counterparty: "Abonnements (démo)", reference: "demo-col-2026-07"}
+  - {amount: "6900", date: 2026-08-08, counterparty: "Abonnements (démo)", reference: "demo-col-2026-08"}
+  - {amount: "6400", date: 2026-09-08, counterparty: "Abonnements (démo)", reference: "demo-col-2026-09"}
+  - {amount: "5800", date: 2026-10-08, counterparty: "Abonnements (démo)", reference: "demo-col-2026-10"}
+  - {amount: "5200", date: 2026-11-08, counterparty: "Abonnements (démo)", reference: "demo-col-2026-11"}
+refunds:
+  - {amount: "290", date: 2026-10-20, counterparty: "Client démo résilié", reference: "demo-refund-1"}
+invoices:
+  - {client: "Bâti Services (démo)", amount: "1800", issued_on: 2026-09-15, due_on: 2026-10-15,
+     description: "Licence annuelle Équipe"}
+  - {client: "Électro Sud (démo)", amount: "940", issued_on: 2026-11-05, due_on: 2026-12-05,
+     description: "Formation et paramétrage"}
+expenses:
+  - {amount: "120", category: "hébergement", vendor: "Hébergeur (démo)", recurring: monthly, spent: true}
+  - {amount: "900", category: "marketing", vendor: "Régie publicitaire (démo)", spent: true, actual: "900"}
+  - {amount: "49", category: "outils", vendor: "CRM (démo)", recurring: monthly, spent: true}
+  - {amount: "2000", category: "conseil", vendor: "Consultant SEO (démo)",
+     description: "Audit SEO complet"}
+
+beliefs:
+  - {statement: "Les encaissements mensuels sont en croissance", topic: finance,
+     metric: finance.collections_trend, comparator: gt, threshold: 0, confidence: 0.7}
+  - {statement: "Le coût d'acquisition client reste sous 80 €", topic: marketing,
+     metric: marketing.cac, comparator: lt, threshold: 80, confidence: 0.6}
+  - {statement: "Nos campagnes rapportent plus de 4 € par euro investi", topic: marketing,
+     metric: marketing.roas, comparator: gt, threshold: 4, confidence: 0.65}
+  - {statement: "Le marché des logiciels pour artisans est peu concentré (HHI < 1 500)", topic: marché,
+     metric: competition.hhi, comparator: lt, threshold: 1500, confidence: 0.6}
+  - {statement: "Nos projets sont en bonne santé (santé moyenne ≥ 0,8)", topic: projets,
+     metric: projects.health_avg, comparator: ge, threshold: 0.8, confidence: 0.6}
+  - {statement: "Les plombiers sont notre meilleur segment", topic: marketing, confidence: 0.6}
+
+decisions:
+  - {title: "Campagne Facebook Ads artisans", decision: "Tester 600 € de Facebook Ads sur 4 semaines",
+     category: ads-social, tags: [marketing, acquisition, facebook],
+     expected: {metric: "essais", baseline: 0, target: 20}, outcome: {actual: 6}}
+  - {title: "Webinaire de démonstration mensuel", decision: "Organiser un webinaire produit",
+     category: evenementiel, tags: [marketing, webinaire], outcome: {status: failed, notes: "9 inscrits, 2 présents"}}
+  - {title: "Stand au salon professionnel régional", decision: "Exposer 2 jours au salon",
+     category: evenementiel, tags: [marketing, salon], outcome: {status: succeeded, notes: "14 clients signés"}}
+  - {title: "Offre annuelle avec deux mois offerts", decision: "Proposer l'annuel à 10 mois payés",
+     category: pricing, tags: [pricing, revenus], expected: {metric: "part_annuel", baseline: 0.1, target: 0.3},
+     outcome: {actual: 0.34}}
+  - {title: "Second test Facebook Ads ciblant les électriciens", decision: "Relancer 400 € ciblés électriciens",
+     category: ads-social, tags: [marketing, acquisition, facebook],
+     expected: {metric: "essais", baseline: 0, target: 15}, outcome: {actual: 3}}
+  - {title: "Programme de parrainage entre artisans", decision: "Un mois offert par filleul abonné",
+     category: acquisition-referral, tags: [acquisition, clients], review_in_days: 0}
+
+records:
+  objective:
+    - {id: o-revenus, title: "Atteindre 10 000 € d'encaissements mensuels", metric: "encaissements mensuels",
+       target: 10000, deadline: 2027-06-30, status: active, tags: [revenus, croissance, clients]}
+    - {id: o-churn, title: "Ramener le churn mensuel sous 2 %", metric: churn, target: 0.02,
+       deadline: 2027-03-31, status: active, tags: [rétention, produit, clients]}
+    - {id: o-conformite, title: "Être conforme à la facturation électronique", metric: conformité,
+       target: 1, deadline: 2026-12-15, status: active, tags: [conformité, produit, facturation]}
+  roadmap_item:
+    - {id: r-relances, title: "Lancer les relances de paiement automatiques", objective_id: o-revenus,
+       due: 2026-12-05, status: in_progress}
+    - {id: r-pdp, title: "Connecteur plateforme de dématérialisation", objective_id: o-conformite,
+       due: 2026-12-12, status: planned}
+
+  market:
+    - {id: m-artisans-fr, name: "Artisans du bâtiment — France", total_customers: 420000, serviceable_ratio: 0.18,
+       obtainable_share: 0.015, annual_value_per_customer: "468", growth_rate: 0.09, horizon_years: 3}
+    - {id: m-artisans-be, name: "Artisans du bâtiment — Belgique", total_customers: 60000, serviceable_ratio: 0.15,
+       obtainable_share: 0.01, annual_value_per_customer: "468", growth_rate: 0.07, horizon_years: 3}
+  competitor:
+    - {id: c-planifpro, name: "PlanifPro (démo)", market_share: 0.22, price: "49", quality: 7,
+       features: [planning, devis, facturation, app mobile], strengths: [notoriété], weaknesses: [support lent]}
+    - {id: c-devisexpress, name: "DevisExpress (démo)", market_share: 0.18, price: "29", quality: 6,
+       features: [devis, facturation]}
+    - {id: c-chantierone, name: "ChantierOne (démo)", market_share: 0.12, price: "79", quality: 8,
+       features: [planning, devis, facturation, stocks, app mobile, comptabilité]}
+    - {id: c-articloud, name: "ArtiCloud (démo)", market_share: 0.08, price: "35", quality: 5,
+       features: [planning, app mobile]}
+  need:
+    - {id: n-devis-rapide, statement: "Établir un devis sur le chantier en moins de 5 minutes", segment: plombiers,
+       importance: 9, satisfaction: 4, frequency: 0.8}
+    - {id: n-paiement, statement: "Être payé plus vite grâce aux relances automatiques", segment: électriciens,
+       importance: 8, satisfaction: 3, frequency: 0.6}
+    - {id: n-planning, statement: "Planifier les équipes sans conflit", segment: électriciens, importance: 7,
+       satisfaction: 6, frequency: 0.7}
+    - {id: n-fournitures, statement: "Commander les fournitures au bon moment", segment: plombiers, importance: 6,
+       satisfaction: 2, frequency: 0.5}
+    - {id: n-compta, statement: "Tenir la comptabilité", segment: paysagistes, importance: 6, satisfaction: 7,
+       frequency: 0.3}
+  segment:
+    - {id: s-plombiers, name: plombiers, size: 9000, pain: 8, willingness_to_pay: "468", reachability: 0.6,
+       competition: 0.5}
+    - {id: s-electriciens, name: électriciens, size: 8000, pain: 7, willingness_to_pay: "420", reachability: 0.5,
+       competition: 0.6}
+    - {id: s-paysagistes, name: paysagistes, size: 5000, pain: 6, willingness_to_pay: "360", reachability: 0.4,
+       competition: 0.2}
+  campaign:
+    - {id: c-google, name: "Recherche Google — devis plombier", channel: google_ads, segment_id: s-plombiers,
+       spend: "900", impressions: 48000, clicks: 1150, conversions: 23, revenue: "3220", status: done}
+    - {id: c-google-b, name: "Recherche Google — variante B (prix affiché)", channel: google_ads,
+       segment_id: s-plombiers, spend: "450", impressions: 24000, clicks: 600, conversions: 21, revenue: "2900",
+       variant_of: c-google, status: active}
+    - {id: c-facebook, name: "Facebook — électriciens", channel: facebook_ads, segment_id: s-electriciens,
+       spend: "600", impressions: 60000, clicks: 900, conversions: 6, revenue: "700", status: done}
+    - {id: c-salon, name: "Salon régional", channel: evenement, spend: "1200", impressions: 3000, clicks: 400,
+       conversions: 14, revenue: "3900", status: done}
+  trend_series:
+    - {id: t-ia-devis, topic: "devis assisté par IA", points: [{period: 2026-06, value: 120}, {period: 2026-07, value: 150},
+       {period: 2026-08, value: 210}, {period: 2026-09, value: 260}, {period: 2026-10, value: 340},
+       {period: 2026-11, value: 450}]}
+    - {id: t-facturation-electronique, topic: "facturation électronique obligatoire", points: [
+       {period: 2026-06, value: 300}, {period: 2026-07, value: 320}, {period: 2026-08, value: 380},
+       {period: 2026-09, value: 520}, {period: 2026-10, value: 700}, {period: 2026-11, value: 950}]}
+    - {id: t-logiciel-planning, topic: "logiciel de planning chantier", points: [{period: 2026-06, value: 800},
+       {period: 2026-07, value: 790}, {period: 2026-08, value: 810}, {period: 2026-09, value: 805},
+       {period: 2026-10, value: 795}, {period: 2026-11, value: 800}]}
+  business_model:
+    - id: bm-saas
+      name: "Abonnement SaaS Nova"
+      fixed_costs_monthly: "3200"
+      cac: "210"
+      revenue_streams:
+        - {name: "Abonnement Solo", type: subscription, price: "29", volume_per_month: 110, gross_margin: 0.85,
+           churn_monthly: 0.035}
+        - {name: "Abonnement Équipe", type: subscription, price: "69", volume_per_month: 38, gross_margin: 0.82,
+           churn_monthly: 0.02}
+        - {name: "Mise en service", type: one_off, price: "150", volume_per_month: 6, gross_margin: 0.6}
+  asset:
+    - {id: a-app, name: "Application devis & planning", kind: product}
+    - {id: a-communaute, name: "Communauté de 400 artisans", kind: audience}
+    - {id: a-ocr, name: "Reconnaissance de documents (OCR)", kind: technology}
+    - {id: a-ia, name: "Assistant IA de rédaction", kind: technology}
+    - {id: a-paiement, name: "Lien de paiement en ligne", kind: technology}
+    - {id: a-negoce, name: "Partenariat négoce de matériaux", kind: channel}
+  agent:
+    - {id: ag-dev, name: "Agent développement (Claude Code)", kind: ai, capabilities: [développement, produit, tests, ia],
+       capacity: 3, reliability: 0.9}
+    - {id: ag-marketing, name: "Agent marketing IA", kind: ai, capabilities: [marketing, contenu, campagne, clients],
+       capacity: 2, reliability: 0.8}
+    - {id: ag-fondateur, name: "Fondateur", kind: human,
+       capabilities: [ventes, finance, clients, stratégie, revenus, trésorerie, gouvernance, partenariats],
+       capacity: 2, reliability: 0.95}
+    - {id: ag-support, name: "Agent support IA", kind: ai, capabilities: [support, clients, documentation],
+       capacity: 3, reliability: 0.85}
+  mission:
+    - {id: mi-relances, title: "Module de relance automatique des factures", required_capabilities: [développement, produit],
+       priority: 8, status: in_progress, assigned_to: ag-dev, resources: [repo-app], start: 2026-11-10T09:00:00Z,
+       due: 2026-11-28T18:00:00Z}
+    - {id: mi-migration, title: "Migration de la base de données", required_capabilities: [développement], priority: 7,
+       status: assigned, assigned_to: ag-dev, resources: [repo-app], start: 2026-11-20T09:00:00Z,
+       due: 2026-11-25T18:00:00Z}
+    - {id: mi-tarifs, title: "Refonte de la page tarifs", required_capabilities: [marketing, contenu], priority: 6,
+       status: assigned, assigned_to: ag-marketing}
+    - {id: mi-pdp, title: "Connecteur facturation électronique", required_capabilities: [développement, conformité],
+       priority: 9, status: todo, depends_on: [mi-migration]}
+    - {id: mi-fb-plus, title: "Augmenter le budget Facebook Ads", required_capabilities: [marketing], priority: 4,
+       status: todo, recommendation: {target: facebook-ads, direction: increase}}
+    - {id: mi-fb-moins, title: "Couper les Facebook Ads", required_capabilities: [finance], priority: 5,
+       status: todo, recommendation: {target: facebook-ads, direction: decrease}}
+    - {id: mi-salon, title: "Campagne salon régional", required_capabilities: [marketing, campagne], status: done,
+       assigned_to: ag-marketing, quality: 0.85, duration_hours: 30, cost: "1200"}
+    - {id: mi-webinaire, title: "Webinaire artisans", required_capabilities: [marketing], status: failed,
+       assigned_to: ag-marketing, quality: 0.3, duration_hours: 12, cost: "150"}
+    - {id: mi-faq, title: "Base de connaissances support", required_capabilities: [support, documentation], status: done,
+       assigned_to: ag-support, quality: 0.9, duration_hours: 16, cost: "0"}
+  signal:
+    - {id: sg-1, title: "Facturation électronique : calendrier d'obligation pour les TPE confirmé", source: "Veille réglementaire (démo)",
+       published_at: 2026-11-12T08:00:00Z, tags: [facturation électronique, réglementation], kind: regulation,
+       text: "Les très petites entreprises du bâtiment devront émettre des factures électroniques."}
+    - {id: sg-2, title: "Les artisans adoptent les devis assistés par IA", source: "Presse pro (démo)",
+       published_at: 2026-11-05T08:00:00Z, tags: [ia, devis], kind: tech,
+       text: "Les assistants de rédaction de devis gagnent du terrain chez les artisans."}
+    - {id: sg-3, title: "Assistant IA : un devis rédigé en deux minutes sur chantier", source: "Blog tech (démo)",
+       published_at: 2026-10-30T08:00:00Z, tags: [ia, devis, mobile], kind: tech}
+    - {id: sg-4, title: "Facturation électronique : les plateformes agréées se multiplient", source: "Veille (démo)",
+       published_at: 2026-10-28T08:00:00Z, tags: [facturation électronique, plateformes], kind: regulation}
+    - {id: sg-5, title: "PlanifPro (démo) lève des fonds pour accélérer", source: "Presse éco (démo)",
+       published_at: 2026-10-20T08:00:00Z, tags: [concurrent, financement], kind: competitor}
+    - {id: sg-6, title: "Hausse du prix du cuivre et des fournitures", source: "Indice matériaux (démo)",
+       published_at: 2026-10-15T08:00:00Z, tags: [matériaux, prix], kind: market}
+    - {id: sg-7, title: "Devis assisté par IA : premiers retours d'électriciens", source: "Forum artisans (démo)",
+       published_at: 2026-11-14T08:00:00Z, tags: [ia, devis], kind: tech}
+    - {id: sg-8, title: "Facturation électronique : guide pour les artisans", source: "Chambre de métiers (démo)",
+       published_at: 2026-11-16T08:00:00Z, tags: [facturation électronique, guide], kind: regulation}
+    - {id: sg-9, title: "Logiciels de planning : marché stable", source: "Étude (démo)",
+       published_at: 2026-08-10T08:00:00Z, tags: [planning], kind: market}
+    - {id: sg-10, title: "Planning chantier : comparatif des outils", source: "Presse pro (démo)",
+       published_at: 2026-07-22T08:00:00Z, tags: [planning, comparatif], kind: market}
+    - {id: sg-11, title: "Webinaires B2B : participation en baisse", source: "Étude marketing (démo)",
+       published_at: 2026-08-02T08:00:00Z, tags: [webinaire, marketing], kind: market}
+    - {id: sg-12, title: "Planning et devis sur mobile : les attentes des artisans", source: "Sondage (démo)",
+       published_at: 2026-07-05T08:00:00Z, tags: [planning, mobile], kind: market}
+  risk:
+    - {id: rk-efacture, title: "Ne pas supporter la facturation électronique à temps", category: legal, probability: 0.6,
+       impact: 8, velocity: 7, indicator_trend: rising, owner: ag-fondateur}
+    - {id: rk-google, title: "Dépendance à un seul canal payant (Google Ads)", category: market, probability: 0.4,
+       impact: 6, velocity: 5, indicator_trend: stable}
+    - {id: rk-client, title: "Départ d'un client clé", category: finance, probability: 0.3, impact: 5, velocity: 6,
+       indicator_trend: rising}
+    - {id: rk-hebergeur, title: "Panne prolongée de l'hébergeur", category: tech, probability: 0.1, impact: 9,
+       velocity: 9, indicator_trend: stable, mitigation: "Sauvegardes quotidiennes hors site"}
+  tech_dependency:
+    - {id: td-fastapi, name: fastapi, ecosystem: pypi, current_version: "0.110.0", critical: true,
+       latest_version: "0.163.1", latest_release: 2026-11-15}
+    - {id: td-pydantic, name: pydantic, ecosystem: pypi, current_version: "2.5.0", critical: true,
+       latest_version: "2.14.3", latest_release: 2026-11-05}
+    - {id: td-httpx, name: httpx, ecosystem: pypi, current_version: "0.27.0", critical: false,
+       latest_version: "0.28.1", latest_release: 2024-12-06}
+  metric_series:
+    - {id: ms-essais, metric: "essais hebdomadaires", points: [{at: 2026-09-07, value: 21}, {at: 2026-09-14, value: 19},
+       {at: 2026-09-21, value: 22}, {at: 2026-09-28, value: 20}, {at: 2026-10-05, value: 21}, {at: 2026-10-12, value: 20},
+       {at: 2026-10-19, value: 13}, {at: 2026-10-26, value: 12}, {at: 2026-11-02, value: 11}, {at: 2026-11-09, value: 12}]}
+  comparison:
+    - id: cmp-hebergeur
+      title: "Choix d'un nouvel hébergeur"
+      criteria:
+        - {name: "coût mensuel", weight: 0.35, direction: cost}
+        - {name: "disponibilité", weight: 0.3, direction: benefit}
+        - {name: "localisation UE", weight: 0.2, direction: benefit}
+        - {name: "qualité du support", weight: 0.15, direction: benefit}
+      proposals:
+        - {name: "Hébergeur A (démo)", values: {"coût mensuel": 120, "disponibilité": 99.9, "localisation UE": 1, "qualité du support": 6}}
+        - {name: "Hébergeur B (démo)", values: {"coût mensuel": 85, "disponibilité": 99.5, "localisation UE": 1, "qualité du support": 5}}
+        - {name: "Hébergeur C (démo)", values: {"coût mensuel": 160, "disponibilité": 99.99, "localisation UE": 0, "qualité du support": 9}}
+  negotiation:
+    - id: neg-negoce
+      title: "Licence marque blanche pour un négoce de matériaux"
+      counterpart: "Négoce Démo"
+      we_are: seller
+      our_batna: "6000"
+      our_reservation: "9000"
+      our_target: "18000"
+      their_estimated_reservation: "14000"
+      issues:
+        - {name: "durée d'engagement de 2 ans", our_cost: 2, their_value: 7}
+        - {name: "exclusivité régionale", our_cost: 6, their_value: 8}
+        - {name: "co-marketing en magasin", our_cost: 3, their_value: 6}
+  project:
+    - id: p-app
+      name: "Application Nova"
+      owner: ag-dev
+      active_users: 148
+      kpis:
+        - {name: "taux d'activation", value: 0.42, target: 0.6, direction: higher, weight: 2, history: [0.48, 0.46, 0.44, 0.42]}
+        - {name: "churn mensuel", value: 0.032, target: 0.02, direction: lower, weight: 2, history: [0.025, 0.027, 0.03, 0.032]}
+        - {name: "NPS", value: 31, target: 40, direction: higher, history: [35, 33, 32, 31]}
+        - {name: "minutes pour créer un devis", value: 7.5, target: 5, direction: lower, history: [9, 8.5, 8, 7.5]}
+      features:
+        - {name: devis, users: 140, uses: 5200, maintenance_cost_monthly: "150"}
+        - {name: planning, users: 96, uses: 2100, maintenance_cost_monthly: "200"}
+        - {name: facturation, users: 88, uses: 1500, maintenance_cost_monthly: "120"}
+        - {name: stocks, users: 15, uses: 140, maintenance_cost_monthly: "160"}
+        - {name: "export comptable", users: 6, uses: 9, maintenance_cost_monthly: "180"}
+        - {name: "messagerie interne", users: 4, uses: 12, maintenance_cost_monthly: "220"}
+        - {name: "bilan carbone chantier", users: 2, uses: 3, maintenance_cost_monthly: "90", released_on: 2026-11-10}
+    - id: p-site
+      name: "Site et acquisition"
+      owner: ag-marketing
+      kpis:
+        - {name: "conversion visiteur → essai", value: 0.028, target: 0.03, direction: higher, history: [0.024, 0.026, 0.027, 0.028]}
+        - {name: "trafic organique mensuel", value: 5200, target: 8000, direction: higher, history: [3800, 4300, 4800, 5200]}
+  change:
+    - id: ch-onboarding
+      project_id: p-app
+      description: "Nouvel onboarding guidé"
+      metric: "minutes jusqu'au premier devis"
+      goal: decrease
+      before: [14, 16, 12, 15, 13, 17, 14, 15]
+      after: [9, 10, 8, 11, 9, 10, 8, 9]
+      changed_on: 2026-10-01
+  offering:
+    - {id: of-nova, name: "Nova Atelier (démo)", owner: us, segment: plombiers, needs: [n-devis-rapide, n-planning],
+       technologies: [app mobile, planning, devis], business_model: abonnement}
+    - {id: of-nova-elec, name: "Nova Atelier (démo)", owner: us, segment: électriciens, needs: [n-planning],
+       technologies: [app mobile, planning, devis], business_model: abonnement}
+    - {id: of-planifpro, name: "PlanifPro (démo)", owner: competitor, segment: électriciens,
+       needs: [n-planning, n-devis-rapide], technologies: [planning, devis, app mobile], business_model: abonnement}
+    - {id: of-chantierone, name: "ChantierOne (démo)", owner: competitor, segment: plombiers,
+       needs: [n-fournitures, n-compta], technologies: [stocks, comptabilité], business_model: abonnement}
+  idea:
+    - {id: i-devis-vocal, title: "Devis vocal assisté par IA", technical_complexity: 6,
+       required_skills: [développement, ia, produit], estimated_cost: "2500", time_to_market_months: 4,
+       regulatory_risk: 0.1, market_evidence: 0.6}
+    - {id: i-marketplace, title: "Place de marché de fournitures", technical_complexity: 8,
+       required_skills: [développement, logistique, partenariats], estimated_cost: "15000", time_to_market_months: 12,
+       regulatory_risk: 0.3, market_evidence: 0.3}
+    - {id: i-relances, title: "Relances automatiques + lien de paiement", technical_complexity: 3,
+       required_skills: [développement, finance], estimated_cost: "800", time_to_market_months: 2,
+       regulatory_risk: 0.2, market_evidence: 0.8}
+  innovation_space:
+    - id: is-nova
+      dimensions:
+        technologie: ["assistant IA", "OCR", "paiement en ligne", "capteurs de chantier"]
+        marché: [plombiers, électriciens, paysagistes]
+        modèle: [abonnement, commission, "à l'usage"]
+        canal: ["négoce de matériaux", "app mobile", "expert-comptable partenaire"]
+      incompatible:
+        - ["capteurs de chantier", "à l'usage"]

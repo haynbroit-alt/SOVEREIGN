@@ -6,6 +6,7 @@ Recherche plein texte FTS5 (BM25, insensible aux accents). Les résultats mesur�
 
 from __future__ import annotations
 
+import builtins
 import re
 from datetime import datetime
 from typing import Any, Literal
@@ -88,21 +89,46 @@ class DecisionMemory:
         now = self.clock.now()
         exp = Expectation.model_validate(expected) if isinstance(expected, dict) else expected
         record = Decision(
-            id=new_id("dec"), title=title, context=context, decision=decision, rationale=rationale,
-            options=options or [], category=category, tags=[t.lower() for t in (tags or [])],
-            skills=skills or [], recommendation_ids=recommendation_ids or [], confidence=clamp(confidence),
-            expected=exp, review_at=parse_dt(review_at) if review_at else None, source=source,
-            created_at=now, updated_at=now,
+            id=new_id("dec"),
+            title=title,
+            context=context,
+            decision=decision,
+            rationale=rationale,
+            options=options or [],
+            category=category,
+            tags=[t.lower() for t in (tags or [])],
+            skills=skills or [],
+            recommendation_ids=recommendation_ids or [],
+            confidence=clamp(confidence),
+            expected=exp,
+            review_at=parse_dt(review_at) if review_at else None,
+            source=source,
+            created_at=now,
+            updated_at=now,
         )
         with self.db.transaction():
             self.db.execute(
                 """INSERT INTO decisions(id, title, context, decision, rationale, options, category, tags, skills,
                        recommendation_ids, confidence, expected, review_at, status, source, created_at, updated_at)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?, ?)""",
-                (record.id, title, context, decision, rationale, dumps(record.options), category,
-                 " ".join(record.tags), dumps(record.skills), dumps(record.recommendation_ids), record.confidence,
-                 record.expected.model_dump_json() if record.expected else None,
-                 iso(record.review_at) if record.review_at else None, source, iso(now), iso(now)),
+                (
+                    record.id,
+                    title,
+                    context,
+                    decision,
+                    rationale,
+                    dumps(record.options),
+                    category,
+                    " ".join(record.tags),
+                    dumps(record.skills),
+                    dumps(record.recommendation_ids),
+                    record.confidence,
+                    record.expected.model_dump_json() if record.expected else None,
+                    iso(record.review_at) if record.review_at else None,
+                    source,
+                    iso(now),
+                    iso(now),
+                ),
             )
             for rec_id in record.recommendation_ids:
                 skill = record.skills[0] if record.skills else "unknown"
@@ -115,14 +141,26 @@ class DecisionMemory:
 
     def _row(self, row: Any) -> Decision:
         return Decision(
-            id=row["id"], title=row["title"], context=row["context"], decision=row["decision"],
-            rationale=row["rationale"], options=loads(row["options"]), category=row["category"],
-            tags=[t for t in row["tags"].split() if t], skills=loads(row["skills"]),
-            recommendation_ids=loads(row["recommendation_ids"]), confidence=row["confidence"],
+            id=row["id"],
+            title=row["title"],
+            context=row["context"],
+            decision=row["decision"],
+            rationale=row["rationale"],
+            options=loads(row["options"]),
+            category=row["category"],
+            tags=[t for t in row["tags"].split() if t],
+            skills=loads(row["skills"]),
+            recommendation_ids=loads(row["recommendation_ids"]),
+            confidence=row["confidence"],
             expected=Expectation.model_validate_json(row["expected"]) if row["expected"] else None,
-            review_at=parse_dt(row["review_at"]) if row["review_at"] else None, status=row["status"],
-            outcome=loads(row["outcome"]), score=row["score"], lesson=row["lesson"], source=row["source"],
-            created_at=parse_dt(row["created_at"]), updated_at=parse_dt(row["updated_at"]),
+            review_at=parse_dt(row["review_at"]) if row["review_at"] else None,
+            status=row["status"],
+            outcome=loads(row["outcome"]),
+            score=row["score"],
+            lesson=row["lesson"],
+            source=row["source"],
+            created_at=parse_dt(row["created_at"]),
+            updated_at=parse_dt(row["updated_at"]),
         )
 
     def get(self, decision_id: str) -> Decision:
@@ -132,7 +170,8 @@ class DecisionMemory:
         return self._row(row)
 
     def list(self, status: str | None = None, category: str | None = None, limit: int = 200) -> list[Decision]:
-        clauses, params = [], []
+        clauses: builtins.list[str] = []
+        params: builtins.list[Any] = []
         if status:
             clauses.append("status = ?")
             params.append(status)
@@ -144,7 +183,7 @@ class DecisionMemory:
         rows = self.db.query(f"SELECT * FROM decisions{where} ORDER BY created_at DESC LIMIT ?", params)
         return [self._row(r) for r in rows]
 
-    def search(self, text: str, limit: int = 10) -> list[tuple[Decision, float]]:
+    def search(self, text: str, limit: int = 10) -> builtins.list[tuple[Decision, float]]:
         query = fts_query(text)
         if not query:
             return []
@@ -173,10 +212,7 @@ class DecisionMemory:
             exp = decision.expected
             baseline = exp.baseline if exp.baseline is not None else 0.0
             span_ = exp.target - baseline
-            if span_ == 0:
-                score = 1.0 if actual == exp.target else 0.0
-            else:
-                score = (actual - baseline) / span_
+            score = (1.0 if actual == exp.target else 0.0) if span_ == 0 else (actual - baseline) / span_
             score = round(max(-1.0, min(1.5, score)), 4)
             if status is None:
                 status = "succeeded" if score >= 0.9 else "partial" if score >= 0.4 else "failed"
@@ -197,15 +233,19 @@ class DecisionMemory:
     @staticmethod
     def _lesson(decision: Decision, status: str, actual: float | None) -> str:
         exp = decision.expected
-        measured = f" (mesuré : {actual} pour une cible {exp.target} sur {exp.metric})" if exp and actual is not None else ""
+        measured = (
+            f" (mesuré : {actual} pour une cible {exp.target} sur {exp.metric})" if exp and actual is not None else ""
+        )
         if status == "succeeded":
             return f"Approche validée pour « {decision.category} » : {decision.decision}{measured}."
         if status == "partial":
             return f"Résultat partiel pour « {decision.category} » : ajuster l'exécution ou la cible{measured}."
-        return (f"Échec pour « {decision.category} » : réexaminer les hypothèses avant de répéter "
-                f"« {decision.decision} »{measured}.")
+        return (
+            f"Échec pour « {decision.category} » : réexaminer les hypothèses avant de répéter "
+            f"« {decision.decision} »{measured}."
+        )
 
-    def due_for_review(self, now: datetime | None = None) -> list[Decision]:
+    def due_for_review(self, now: datetime | None = None) -> builtins.list[Decision]:
         moment = iso(now or self.clock.now())
         rows = self.db.query(
             "SELECT * FROM decisions WHERE status = 'open' AND review_at IS NOT NULL AND review_at <= ? "

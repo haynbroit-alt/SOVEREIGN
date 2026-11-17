@@ -82,9 +82,7 @@ def test_size_market_uses_workspace_and_focus_recommendation(kernel):
 
 
 def test_competition_hhi_quadrants_and_features(kernel):
-    out = kernel.run_skill(
-        SKILL, "analyze_competition", {"competitors": COMPETITORS, "our_features": ["export", "ia"]}
-    )
+    out = kernel.run_skill(SKILL, "analyze_competition", {"competitors": COMPETITORS, "our_features": ["export", "ia"]})
     # 50² + 30² + 10² = 3500 → très concentré
     assert out.hhi == 3500.0
     assert out.concentration == "très concentré"

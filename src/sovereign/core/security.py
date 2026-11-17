@@ -22,8 +22,12 @@ from sovereign.core.ids import new_id
 
 SCOPES = ("read", "write", "admin", "webhook")
 # admin implique write qui implique read.
-_IMPLIED = {"admin": {"admin", "write", "read", "webhook"}, "write": {"write", "read"}, "read": {"read"},
-            "webhook": {"webhook"}}
+_IMPLIED = {
+    "admin": {"admin", "write", "read", "webhook"},
+    "write": {"write", "read"},
+    "read": {"read"},
+    "webhook": {"webhook"},
+}
 
 
 @dataclass(frozen=True)
@@ -72,7 +76,8 @@ class ApiKeyStore:
 
     def revoke(self, key_id: str) -> bool:
         cursor = self.db.execute(
-            "UPDATE api_keys SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL", (iso(self.clock.now()), key_id)
+            "UPDATE api_keys SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL",
+            (iso(self.clock.now()), key_id),
         )
         return cursor.rowcount > 0
 

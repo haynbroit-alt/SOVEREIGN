@@ -31,9 +31,7 @@ if TYPE_CHECKING:
     from sovereign.kernel import Kernel
 
 Severity = Literal["info", "warning", "critical"]
-InsightKind = Literal[
-    "observation", "opportunity", "risk", "anomaly", "trend", "contradiction", "strength", "weakness"
-]
+InsightKind = Literal["observation", "opportunity", "risk", "anomaly", "trend", "contradiction", "strength", "weakness"]
 ActionRisk = Literal["read_only", "write", "external"]
 
 
@@ -200,8 +198,12 @@ class Skill:
             if not (isinstance(output_model, type) and issubclass(output_model, SkillOutput)):
                 raise TypeError(f"{cls.__name__}.{attr_name} : la sortie doit hériter de SkillOutput")
             found[attr_name] = ActionSpec(
-                name=attr_name, summary=meta["summary"], risk=meta["risk"], input_model=input_model,
-                output_model=output_model, fn=member,
+                name=attr_name,
+                summary=meta["summary"],
+                risk=meta["risk"],
+                input_model=input_model,
+                output_model=output_model,
+                fn=member,
             )
         return found
 

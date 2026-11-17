@@ -25,7 +25,7 @@ _configured = False
 def setup_telemetry(enabled: bool | str = False, service_name: str = "sovereign") -> bool:
     """Active l'export des traces si demandé et si le SDK est installé. Idempotent."""
 
-    global _configured, _tracer
+    global _configured, _tracer  # noqa: PLW0603 — configuration unique du fournisseur de traces
     if _configured:
         return True
     mode = str(os.environ.get("SOVEREIGN_OTEL", enabled)).lower()

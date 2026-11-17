@@ -42,8 +42,9 @@ class Notifier:
             else:
                 import httpx2
 
-                response = httpx2.post(self.settings.notify_webhook_url or "", content=raw, headers=headers,
-                                       timeout=10.0)
+                response = httpx2.post(
+                    self.settings.notify_webhook_url or "", content=raw, headers=headers, timeout=10.0
+                )
                 response.raise_for_status()
         except Exception as exc:
             log.warning("échec d'envoi de notification : %s", exc)

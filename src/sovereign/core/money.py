@@ -29,7 +29,7 @@ def fmt(value: Decimal | int | float, currency: str = "EUR") -> str:
     amount = to_decimal(value)
     sign = "-" if amount < 0 else ""
     integer, _, frac = f"{abs(amount):.2f}".partition(".")
-    groups = []
+    groups: list[str] = []
     while integer:
         groups.insert(0, integer[-3:])
         integer = integer[:-3]

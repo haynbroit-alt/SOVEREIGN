@@ -13,9 +13,16 @@ NAMES = REGISTRY.names
 
 def test_catalog_is_complete():
     expected = {
-        "business-intelligence", "marketing-strategy", "business-development", "intelligent-management",
-        "watch-anticipation", "negotiation-strategy", "finance-budget", "analysis-optimization",
-        "innovation-creativity", "memory-learning",
+        "business-intelligence",
+        "marketing-strategy",
+        "business-development",
+        "intelligent-management",
+        "watch-anticipation",
+        "negotiation-strategy",
+        "finance-budget",
+        "analysis-optimization",
+        "innovation-creativity",
+        "memory-learning",
     }
     missing = expected - set(NAMES)
     if missing:

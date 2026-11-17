@@ -46,9 +46,7 @@ class CompareInput(BaseModel):
     title: str = "Comparaison"
     criteria: list[Criterion] = Field(default_factory=list)
     proposals: list[Proposal] = Field(default_factory=list)
-    comparison_id: str | None = Field(
-        None, description="Charger une comparaison du store (sinon la plus récente)"
-    )
+    comparison_id: str | None = Field(None, description="Charger une comparaison du store (sinon la plus récente)")
     perturbation: float = Field(0.2, gt=0, lt=1)
 
 
@@ -78,9 +76,7 @@ def _load_comparison(ctx: SkillContext, data: CompareInput) -> tuple[str, list[C
         if not records:
             raise SkillError(f"comparaison inconnue : {data.comparison_id}")
     if not records:
-        raise SkillError(
-            "aucune proposition à comparer : fournissez criteria + proposals ou une « comparison »"
-        )
+        raise SkillError("aucune proposition à comparer : fournissez criteria + proposals ou une « comparison »")
     record = records[-1]
     return (
         record.get("title", data.title),
@@ -89,9 +85,7 @@ def _load_comparison(ctx: SkillContext, data: CompareInput) -> tuple[str, list[C
     )
 
 
-def _score(
-    criteria: list[Criterion], proposals: list[Proposal], weights: list[float]
-) -> list[tuple[float, float]]:
+def _score(criteria: list[Criterion], proposals: list[Proposal], weights: list[float]) -> list[tuple[float, float]]:
     total = sum(weights)
     w = [x / total for x in weights]
     weighted = [0.0] * len(proposals)
@@ -235,9 +229,7 @@ class DebateInput(BaseModel):
     def _known_agents(self) -> DebateInput:
         unknown = [a for a in self.agents if a not in AGENTS]
         if unknown or len(self.agents) < 2:
-            raise ValueError(
-                f"agents inconnus ou trop peu nombreux : {unknown or self.agents} (connus : {AGENTS})"
-            )
+            raise ValueError(f"agents inconnus ou trop peu nombreux : {unknown or self.agents} (connus : {AGENTS})")
         return self
 
 
@@ -300,9 +292,7 @@ def _stance(score: float) -> Literal["pour", "contre", "sous conditions"]:
 
 
 def _missing(name: str, label: str) -> Argument:
-    return Argument(
-        text=f"Donnée manquante : {label} — position prudente.", strength=0.2, polarity=0.0, evidence=name
-    )
+    return Argument(text=f"Donnée manquante : {label} — position prudente.", strength=0.2, polarity=0.0, evidence=name)
 
 
 def _arguments(agent: str, facts: Facts) -> list[Argument]:
@@ -620,9 +610,7 @@ class NegotiationStrategySkill(Skill):
             to_decimal(params.our_batna),
         )
         theirs = (
-            to_decimal(params.their_estimated_reservation)
-            if params.their_estimated_reservation is not None
-            else None
+            to_decimal(params.their_estimated_reservation) if params.their_estimated_reservation is not None else None
         )
         if buyer and target > reservation:
             raise SkillError("acheteur : la cible doit être ≤ au prix de réservation")
@@ -630,13 +618,9 @@ class NegotiationStrategySkill(Skill):
             raise SkillError("vendeur : la cible doit être ≥ au prix de réservation")
         warnings: list[str] = []
         if buyer and reservation > batna:
-            warnings.append(
-                f"Réservation {reservation} supérieure à la BATNA {batna} : mieux vaut l'alternative."
-            )
+            warnings.append(f"Réservation {reservation} supérieure à la BATNA {batna} : mieux vaut l'alternative.")
         if not buyer and reservation < batna:
-            warnings.append(
-                f"Réservation {reservation} inférieure à la BATNA {batna} : mieux vaut l'alternative."
-            )
+            warnings.append(f"Réservation {reservation} inférieure à la BATNA {batna} : mieux vaut l'alternative.")
         zopa_exists: bool | None = None
         low = high = None
         if theirs is not None:
@@ -662,9 +646,7 @@ class NegotiationStrategySkill(Skill):
         sign = Decimal(1) if buyer else Decimal(-1)
         position = anchor
         plan: list[ConcessionStep] = []
-        for index, share in enumerate(
-            (Decimal("0.50"), Decimal("0.25"), Decimal("0.15"), Decimal("0.10")), start=1
-        ):
+        for index, share in enumerate((Decimal("0.50"), Decimal("0.25"), Decimal("0.15"), Decimal("0.10")), start=1):
             concession = to_decimal(distance * share)
             position = to_decimal(position + sign * concession) if index < 4 else reservation
             plan.append(ConcessionStep(step=index, concession=concession, position=position))
@@ -692,9 +674,7 @@ class NegotiationStrategySkill(Skill):
                     )
                 )
             else:
-                trades.append(
-                    Trade(issue=issue.name, stance="neutre", reason="À échanger contre contrepartie.")
-                )
+                trades.append(Trade(issue=issue.name, stance="neutre", reason="À échanger contre contrepartie."))
         title = params.title or "Négociation"
         out = NegotiationOutput(
             title=title,
@@ -720,9 +700,7 @@ class NegotiationStrategySkill(Skill):
         )
         for warning in warnings:
             out.insights.append(
-                Insight(
-                    kind="contradiction", severity="warning", title="Paramètres incohérents", detail=warning
-                )
+                Insight(kind="contradiction", severity="warning", title="Paramètres incohérents", detail=warning)
             )
         if zopa_exists is False:
             out.insights.append(
@@ -737,8 +715,7 @@ class NegotiationStrategySkill(Skill):
                 Recommendation(
                     title=f"Activer l'alternative (BATNA) pour « {title} »",
                     rationale=(
-                        "Aucune ZOPA : négocier sur le prix seul est voué à l'échec ; "
-                        "élargir les enjeux ou sortir."
+                        "Aucune ZOPA : négocier sur le prix seul est voué à l'échec ; élargir les enjeux ou sortir."
                     ),
                     impact=6,
                     effort=3,
@@ -755,8 +732,7 @@ class NegotiationStrategySkill(Skill):
                 Recommendation(
                     title=f"Ouvrir « {title} » à {anchor} et suivre le plan de concessions",
                     rationale=(
-                        "Ancrage au-delà de la cible, concessions décroissantes "
-                        "signalant l'approche de la limite."
+                        "Ancrage au-delà de la cible, concessions décroissantes signalant l'approche de la limite."
                     ),
                     impact=6,
                     effort=3,
@@ -780,23 +756,13 @@ class NegotiationStrategySkill(Skill):
             total_weight = sum(a.weight for a in option.assessments)
             net = sum(a.score * a.weight for a in option.assessments) / total_weight
             ordered = sorted(option.assessments, key=lambda a: -abs(a.score * a.weight))
-            pros = [
-                f"{a.dimension} (+{a.score:g}){' — ' + a.note if a.note else ''}"
-                for a in ordered
-                if a.score > 0
-            ]
-            cons = [
-                f"{a.dimension} ({a.score:g}){' — ' + a.note if a.note else ''}"
-                for a in ordered
-                if a.score < 0
-            ]
+            pros = [f"{a.dimension} (+{a.score:g}){' — ' + a.note if a.note else ''}" for a in ordered if a.score > 0]
+            cons = [f"{a.dimension} ({a.score:g}){' — ' + a.note if a.note else ''}" for a in ordered if a.score < 0]
             verdict: Literal["favorable", "mitigé", "défavorable"] = (
                 "favorable" if net >= 1.5 else "défavorable" if net <= -1.5 else "mitigé"
             )
             verdicts.append(
-                OptionVerdict(
-                    name=option.name, pros=pros, cons=cons, net_score=round(net, 3), verdict=verdict
-                )
+                OptionVerdict(name=option.name, pros=pros, cons=cons, net_score=round(net, 3), verdict=verdict)
             )
         verdicts.sort(key=lambda v: -v.net_score)
         best = verdicts[0]
@@ -887,11 +853,7 @@ class NegotiationStrategySkill(Skill):
         }
         vote = sum(final[a] * weights[a] for a in data.agents) / sum(weights.values())
         vetoes: list[str] = []
-        if (
-            facts.cost is not None
-            and facts.budget_available is not None
-            and facts.cost > facts.budget_available
-        ):
+        if facts.cost is not None and facts.budget_available is not None and facts.cost > facts.budget_available:
             vetoes.append(
                 f"Veto budgétaire : coût {facts.cost} > disponible {facts.budget_available} (règle des 10 %)."
             )
@@ -914,9 +876,7 @@ class NegotiationStrategySkill(Skill):
         confidence = round(max(0.1, min(0.95, (0.35 + abs(vote)) * (0.4 + 0.6 * completeness))), 3)
         llm_used = False
         if data.use_llm and ctx.llm is not None:
-            prompt = "\n".join(
-                f"{t.agent} ({t.round}) : " + " ".join(a.text for a in t.arguments) for t in transcript
-            )
+            prompt = "\n".join(f"{t.agent} ({t.round}) : " + " ".join(a.text for a in t.arguments) for t in transcript)
             rewritten = ctx.llm.structured(
                 "Tu reformules en français, de façon concise et professionnelle, "
                 "les arguments d'un conseil de "
@@ -997,9 +957,7 @@ class NegotiationStrategySkill(Skill):
 
     @action("Recommander la meilleure décision : comparaison multicritère puis débat sur le gagnant")
     def recommend(self, ctx: SkillContext, data: RecommendInput) -> RecommendOutput:
-        comparison = self.compare_proposals(
-            ctx, CompareInput.model_validate(data.model_dump(exclude={"facts"}))
-        )
+        comparison = self.compare_proposals(ctx, CompareInput.model_validate(data.model_dump(exclude={"facts"})))
         verdict: str | None = None
         confidence = comparison.recommendations[0].confidence
         text = f"Retenir « {comparison.winner} » (stabilité {comparison.stability:.0%})."
@@ -1021,9 +979,7 @@ class NegotiationStrategySkill(Skill):
                     f"la rejette : {debate.summary}"
                 )
             elif debate.verdict == "adopter sous conditions":
-                text = f"Retenir « {comparison.winner} » sous conditions : " + "; ".join(
-                    debate.conditions[:3]
-                )
+                text = f"Retenir « {comparison.winner} » sous conditions : " + "; ".join(debate.conditions[:3])
             else:
                 text = f"Retenir « {comparison.winner} » : critères et conseil concordent."
             out.insights.extend(debate.insights)

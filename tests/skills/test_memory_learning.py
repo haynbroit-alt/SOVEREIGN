@@ -6,10 +6,18 @@ from sovereign.core.memory import MemoryError_
 
 
 def _decide(kernel, title, category="pricing", tags=("pro",), expected=None, review=None):
-    return kernel.run_skill("memory-learning", "record_decision", {
-        "title": title, "decision": f"Faire {title}", "category": category, "tags": list(tags),
-        "expected": expected, "review_in_days": review,
-    }).decision
+    return kernel.run_skill(
+        "memory-learning",
+        "record_decision",
+        {
+            "title": title,
+            "decision": f"Faire {title}",
+            "category": category,
+            "tags": list(tags),
+            "expected": expected,
+            "review_in_days": review,
+        },
+    ).decision
 
 
 def test_record_and_search_accent_insensitive(kernel):
@@ -54,8 +62,11 @@ def test_repeated_errors_and_adaptation(kernel):
 def test_similar_failure_warning(kernel):
     d = _decide(kernel, "Campagne radio locale", category="radio")
     kernel.memory.record_outcome(d.id, status="failed")
-    again = kernel.run_skill("memory-learning", "record_decision", {
-        "title": "Campagne radio nationale", "decision": "Radio", "category": "radio"})
+    again = kernel.run_skill(
+        "memory-learning",
+        "record_decision",
+        {"title": "Campagne radio nationale", "decision": "Radio", "category": "radio"},
+    )
     assert any(i.kind == "risk" for i in again.insights)
 
 
@@ -69,7 +80,14 @@ def test_due_reviews_and_assess(kernel, clock):
 
 
 def test_adopted_recommendations_are_tracked(kernel):
-    kernel.run_skill("memory-learning", "record_decision", {
-        "title": "Suivre la reco", "decision": "ok", "skills": ["finance-budget"],
-        "recommendation_ids": ["rec_abc"]})
+    kernel.run_skill(
+        "memory-learning",
+        "record_decision",
+        {
+            "title": "Suivre la reco",
+            "decision": "ok",
+            "skills": ["finance-budget"],
+            "recommendation_ids": ["rec_abc"],
+        },
+    )
     assert kernel.skill_utility()["finance-budget"]["adopted"] == 1

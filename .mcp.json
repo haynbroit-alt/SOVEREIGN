@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "sovereign": {
+      "type": "stdio",
+      "command": "uv",
+      "args": ["run", "--project", ".", "sovereign", "mcp"]
+    }
+  }
+}

@@ -213,7 +213,9 @@ def two_proportion_z_test(successes_a: int, total_a: int, successes_b: int, tota
     return TestResult(z, p, effect, relative)
 
 
-def cusum_change_point(values: Sequence[float], baseline: int | None = None, k: float = 0.5, h: float = 4.0) -> int | None:
+def cusum_change_point(
+    values: Sequence[float], baseline: int | None = None, k: float = 0.5, h: float = 4.0
+) -> int | None:
     """CUSUM tabulaire bilatéral. Retourne l'index de la première alarme de rupture, ou None.
 
     La moyenne/écart-type de référence sont estimés sur les ``baseline`` premiers points (par défaut la moitié).
