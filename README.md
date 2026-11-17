@@ -32,7 +32,7 @@ uv run sovereign shell                    # puis tapez /budget, /strategy, /coun
 | 4 | `intelligent-management` | Affectation sous contrainte de capacité, performance (a posteriori bêta), 5 types de conflits, tri topologique | `register_agent`, `assign_missions`, `measure_performance`, `detect_conflicts`, `coordination_report` |
 | 5 | `watch-anticipation` | Termes émergents (z de Poisson), CUSUM, z robuste, carte des risques, versions PyPI/npm, RSS/Atom | `ingest_signals`, `detect_trends`, `detect_market_changes`, `assess_risks`, `check_technologies`, `fetch_feed`, `prepare_decisions` |
 | 6 | `negotiation-strategy` | Somme pondérée + TOPSIS + sensibilité, ZOPA/BATNA, concessions, débat entre IA | `compare_proposals`, `prepare_negotiation`, `pros_cons`, `debate`, `recommend` |
-| 7 | `finance-budget` | Registre append-only, enveloppe 10 %, revue humaine, prévision, alertes de seuil | `status`, `record_revenue`, `issue_invoice`, `collect_invoice`, `request_expense`, `confirm_expense`, `check_spend`, `forecast` |
+| 7 | `finance-budget` | Registre append-only, enveloppe 10 %, revue humaine, prévision linéaire + **scénarios Monte-Carlo** (bootstrap des croissances réelles : probabilité d'épuisement, P10/P50/P90), alertes de seuil | `status`, `record_revenue`, `issue_invoice`, `collect_invoice`, `request_expense`, `confirm_expense`, `check_spend`, `forecast` |
 | 8 | `analysis-optimization` | Santé des KPI, fonctionnalités inutiles (Pareto), ICE, test de Welch + d de Cohen, audit de SOVEREIGN lui-même | `analyze_projects`, `detect_unused_features`, `recommend_improvements`, `verify_change`, `audit_system` |
 | 9 | `innovation-creativity` | Analyse morphologique, SCAMPER, espaces blancs, combinaisons de technologies, faisabilité (moyenne géométrique) | `explore_concepts`, `scamper`, `find_white_spaces`, `combine_technologies`, `evaluate_feasibility` |
 | 10 | `memory-learning` | FTS5/BM25, score attendu vs réel, erreurs répétées, adaptation bayésienne | `record_decision`, `record_outcome`, `search`, `compare_results`, `detect_repeated_errors`, `lessons`, `adapt_strategies` |
@@ -93,7 +93,7 @@ Variables `SOVEREIGN_*` ou `~/.sovereign/sovereign.toml` : `SOVEREIGN_HOME`, `SO
 ## Qualité
 
 ```bash
-uv run pytest -o addopts="" -q --cov=sovereign    # 262 tests (Python 3.12 à 3.14), couverture ≈ 92 %
+uv run pytest -o addopts="" -q --cov=sovereign    # 266 tests (Python 3.12 à 3.14), couverture ≈ 92 %
 uv run ruff check src tests && uv run mypy
 ```
 

@@ -6,15 +6,17 @@ prévoit les coûts et empêche tout dépassement. Aucun accès bancaire : SOVER
 
 from __future__ import annotations
 
+import random
 from datetime import date
 from decimal import Decimal
+from itertools import pairwise
 from typing import Literal
 
 from pydantic import BaseModel, Field
 
 from sovereign.core.finance import Expense, ExpenseDecision, FinanceStatus, Invoice, LedgerEntry
 from sovereign.core.money import to_decimal
-from sovereign.core.stats import linear_fit
+from sovereign.core.stats import linear_fit, percentile
 from sovereign.skills.base import (
     EmptyInput,
     Insight,
@@ -106,6 +108,22 @@ class PlannedExpense(BaseModel):
 class ForecastInput(BaseModel):
     months: int = Field(6, ge=1, le=36)
     planned_expenses: list[PlannedExpense] = Field(default_factory=list)
+    simulations: int = Field(2000, ge=0, le=20000, description="Scénarios simulés (0 = désactivé)")
+
+
+class ScenarioSummary(BaseModel):
+    """Bac à sable : trajectoires simulées en rééchantillonnant les VRAIES croissances mensuelles observées."""
+
+    simulations: int
+    method: str
+    exhaustion_probability: float
+    pessimistic_exhaustion_month: str | None
+    available_end_p10: Decimal
+    available_end_p50: Decimal
+    available_end_p90: Decimal
+    collections_total_p10: Decimal
+    collections_total_p50: Decimal
+    collections_total_p90: Decimal
 
 
 class ForecastMonth(BaseModel):
@@ -121,6 +139,64 @@ class ForecastOutput(SkillOutput):
     monthly_trend: float | None
     months: list[ForecastMonth]
     exhaustion_month: str | None
+    scenarios: ScenarioSummary | None = None
+
+
+def simulate_scenarios(
+    values: list[float],
+    gap: int,
+    available: Decimal,
+    ratio: Decimal,
+    costs: list[Decimal],
+    simulations: int,
+    current_month: str,
+) -> ScenarioSummary | None:
+    """Bootstrap des taux de croissance mensuels observés (≥ 3 taux, donc ≥ 4 mois d'historique).
+
+    Chaque scénario prolonge le dernier mois observé en tirant au hasard (avec remise) des croissances réellement
+    constatées, bornées à [−90 % ; +200 %]. Graine dérivée de l'historique : résultat reproductible.
+    """
+
+    rates = [min(2.0, max(-0.9, b / a - 1)) for a, b in pairwise(values) if a > 0]
+    if len(rates) < 3 or simulations <= 0:
+        return None
+    horizon = len(costs)
+    rng = random.Random(int(sum(values) * 100) + 7919 * len(values))
+    start = float(available)
+    finals: list[float] = []
+    totals: list[float] = []
+    exhausted = 0
+    by_month: list[list[float]] = [[] for _ in range(horizon)]
+    for _ in range(simulations):
+        level = values[-1]
+        for _k in range(gap):  # rattrape les mois écoulés depuis le dernier mois observé
+            level *= 1 + rng.choice(rates)
+        balance, total, hit = start, 0.0, False
+        for step in range(horizon):
+            if step > 0:  # le mois 0 projeté est déjà atteint par la boucle d'écart ci-dessus
+                level *= 1 + rng.choice(rates)
+            total += level
+            balance += level * float(ratio) - float(costs[step])
+            by_month[step].append(balance)
+            hit = hit or balance < 0
+        finals.append(balance)
+        totals.append(total)
+        exhausted += hit
+    pessimistic = next(
+        (_add_months(current_month, step) for step in range(horizon) if percentile(by_month[step], 10) < 0), None
+    )
+    return ScenarioSummary(
+        simulations=simulations,
+        method=f"bootstrap de {len(rates)} croissances mensuelles observées",
+        exhaustion_probability=round(exhausted / simulations, 4),
+        pessimistic_exhaustion_month=pessimistic,
+        available_end_p10=to_decimal(percentile(finals, 10)),
+        available_end_p50=to_decimal(percentile(finals, 50)),
+        available_end_p90=to_decimal(percentile(finals, 90)),
+        collections_total_p10=to_decimal(percentile(totals, 10)),
+        collections_total_p50=to_decimal(percentile(totals, 50)),
+        collections_total_p90=to_decimal(percentile(totals, 90)),
+    )
 
 
 def _months_between(start: str, end: str) -> int:
@@ -235,6 +311,11 @@ class FinanceBudgetSkill(Skill):
                     tags=["finance", "gouvernance"],
                 )
             )
+        # ANTICIPER : scénarios d'épuisement sur 6 mois (uniquement avec assez d'historique).
+        outlook = self.forecast(ctx, ForecastInput(months=6))
+        out.metrics.update(outlook.metrics)
+        out.insights.extend(outlook.insights)
+        out.recommendations.extend(outlook.recommendations)
         if status.envelope > 0 and status.utilization >= 0.8:
             out.recommendations.append(
                 Recommendation(
@@ -368,12 +449,15 @@ class FinanceBudgetSkill(Skill):
         available = finance.available()
         months: list[ForecastMonth] = []
         exhaustion: str | None = None
+        starting_available = available
+        step_costs: list[Decimal] = []
         for step in range(data.months):
             month = _add_months(current_month, step)
             collections = projection(gap + step)
             envelope_increase = to_decimal(collections * ratio)
             planned = sum((p.amount for p in data.planned_expenses if p.month_offset == step), Decimal("0"))
             costs = to_decimal(recurring_monthly + (recurring_yearly / 12) + planned)
+            step_costs.append(costs)
             available = to_decimal(available + envelope_increase - costs)
             months.append(
                 ForecastMonth(
@@ -386,7 +470,14 @@ class FinanceBudgetSkill(Skill):
             )
             if available < 0 and exhaustion is None:
                 exhaustion = month
-        out = ForecastOutput(method=method, monthly_trend=trend, months=months, exhaustion_month=exhaustion)
+        scenarios = simulate_scenarios(
+            values, gap, starting_available, ratio, step_costs, data.simulations, current_month
+        )
+        out = ForecastOutput(
+            method=method, monthly_trend=trend, months=months, exhaustion_month=exhaustion, scenarios=scenarios
+        )
+        if scenarios is not None:
+            out.metrics["finance.exhaustion_probability"] = scenarios.exhaustion_probability
         if exhaustion:
             out.summary = f"Enveloppe épuisée prévue en {exhaustion} au rythme actuel des coûts."
             out.insights.append(
@@ -406,6 +497,41 @@ class FinanceBudgetSkill(Skill):
             )
         else:
             out.summary = f"Aucun épuisement prévu sur {data.months} mois ({method})."
+        if scenarios is not None:
+            out.summary += (
+                f" Scénarios ({scenarios.simulations}) : probabilité d'épuisement "
+                f"{scenarios.exhaustion_probability:.0%},"
+                f" disponible final P10/P50/P90 = {scenarios.available_end_p10} / {scenarios.available_end_p50} / "
+                f"{scenarios.available_end_p90}."
+            )
+            if not exhaustion and scenarios.exhaustion_probability >= 0.2:
+                out.insights.append(
+                    Insight(
+                        kind="risk",
+                        severity="warning",
+                        title=f"Épuisement budgétaire possible ({scenarios.exhaustion_probability:.0%} des scénarios)",
+                        detail=f"Tendance centrale saine, mais le scénario pessimiste (P10) passe sous zéro "
+                        f"en {scenarios.pessimistic_exhaustion_month}.",
+                        metric="finance.exhaustion_probability",
+                        value=scenarios.exhaustion_probability,
+                    )
+                )
+                out.recommendations.append(
+                    Recommendation(
+                        title="Constituer une marge budgétaire avant de nouveaux engagements",
+                        rationale="La volatilité réelle des encaissements rend un épuisement plausible.",
+                        impact=6,
+                        effort=2,
+                        confidence=min(0.9, 0.4 + scenarios.exhaustion_probability),
+                        urgency=6,
+                        risk=0.05,
+                        tags=["finance", "anticipation"],
+                        expected_metric=TargetMetric(
+                            metric="finance.exhaustion_probability", direction="decrease", target=0.1
+                        ),
+                        evidence=[f"P(épuisement)={scenarios.exhaustion_probability:.0%}"],
+                    )
+                )
         return out
 
 
