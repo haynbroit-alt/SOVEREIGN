@@ -1,0 +1,27 @@
+                              État réel du système                              
+
+▌ Système opérationnel.                                                       
+
+État                                                                            
+
+ • Version : SOVEREIGN 0.1.0 — Anticiper. Décider. Diriger. Faire grandir.      
+ • Base : /home/runner/work/SOVEREIGN/SOVEREIGN/.sovereign-state/sovereign.db (4
+   Ko), schéma v1, intégrité ok                                                 
+ • Données : aucune                                                             
+ • Compteurs : {'décisions': 0, 'croyances': 0, 'observations': 0, 'événements':
+   0, 'exécutions de Skills': 0, 'rapports': 0}                                 
+ • Skills : 10 découvertes, chargées : aucune                                   
+ • File de tâches : {'queued': 0, 'running': 0, 'succeeded': 0, 'failed': 0,    
+   'dead': 0}                                                                   
+ • Cycles dus maintenant : ['daily', 'weekly', 'monthly']                       
+ • Validations humaines en attente : 0                                          
+ • Budget disponible : 0,00 € (0% utilisé)                                      
+ • LLM : désactivé (mode déterministe)                                          
+ • Notifications sortantes : non configurées                                    
+ • Webhooks entrants : aucun secret configuré                                   
+ • Clés d'API actives : 0                                                       
+ • OpenTelemetry : API no-op (export désactivé)                                 
+
+Derniers cycles                                                                 
+
+Aucune donnée.                                                                  

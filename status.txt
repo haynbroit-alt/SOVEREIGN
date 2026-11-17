@@ -1,0 +1,33 @@
+                              État réel du système                              
+
+▌ Système opérationnel.                                                       
+
+État                                                                            
+
+ • Version : SOVEREIGN 0.1.0 — Anticiper. Décider. Diriger. Faire grandir.      
+ • Base : /home/runner/work/SOVEREIGN/SOVEREIGN/.sovereign-state/sovereign.db   
+   (208 Ko), schéma v1, intégrité ok                                            
+ • Données : {'director_mission': 3}                                            
+ • Compteurs : {'décisions': 0, 'croyances': 0, 'observations': 11,             
+   'événements': 6, 'exécutions de Skills': 3, 'rapports': 3}                   
+ • Skills : 10 découvertes, chargées : aucune                                   
+ • File de tâches : {'queued': 0, 'running': 0, 'succeeded': 3, 'failed': 0,    
+   'dead': 0}                                                                   
+ • Cycles dus maintenant : aucun                                                
+ • Validations humaines en attente : 0                                          
+ • Budget disponible : 0,00 € (0% utilisé)                                      
+ • LLM : désactivé (mode déterministe)                                          
+ • Notifications sortantes : non configurées                                    
+ • Webhooks entrants : aucun secret configuré                                   
+ • Clés d'API actives : 0                                                       
+ • OpenTelemetry : API no-op (export désactivé)                                 
+
+Derniers cycles                                                                 
+
+                                                                                
+ Cycle    Période     Statut     Début                   Rapport                
+ ────────────────────────────────────────────────────────────────────────────── 
+ monthly  2026-11     succeeded  2026-11-17T17:02:27+0…  rpt_1a1ea75bd7bd7e124… 
+ weekly   2026-W47    succeeded  2026-11-17T17:02:27+0…  rpt_1a1ea75bd84c51faa… 
+ daily    2026-11-17  succeeded  2026-11-17T17:02:27+0…  rpt_1a1ea75bd85bd4372… 
+                                                                                
