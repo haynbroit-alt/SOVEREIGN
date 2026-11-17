@@ -254,6 +254,25 @@ def data_import_csv(
         app.close()
 
 
+@data_cli.command("inbox")
+def data_inbox(
+    folder: Annotated[Path | None, typer.Argument(help="Dossier de dépôt (défaut : $SOVEREIGN_HOME/inbox)")] = None,
+    home: HomeOpt = None,
+) -> None:
+    """Importer tous les fichiers déposés (CSV « <kind>--libellé.csv », YAML/JSON) puis les ranger."""
+
+    from sovereign.importers import process_inbox
+
+    app = _app(home)
+    try:
+        target = folder or app.kernel.settings.home_path / "inbox"
+        results = process_inbox(app, target)
+        app.worker.run_once()
+        _print({"inbox": str(target), "files": results}, True)
+    finally:
+        app.close()
+
+
 @data_cli.command("export")
 def data_export(home: HomeOpt = None) -> None:
     """Exporter l'espace de travail en JSON (sortie standard)."""

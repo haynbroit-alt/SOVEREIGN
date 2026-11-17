@@ -137,3 +137,42 @@ def test_cli_import_csv(tmp_path):
     )
     assert result.exit_code == 0, result.output
     assert '"imported": 3' in result.output
+
+
+def test_inbox_imports_and_files_everything(app, tmp_path):
+    from sovereign.importers import process_inbox
+
+    inbox = tmp_path / "inbox"
+    inbox.mkdir()
+    (inbox / "collections--banque-novembre.csv").write_bytes(BANK_FR)
+    (inbox / "campaigns--google.csv").write_text(ADS, encoding="utf-8")
+    (inbox / "entreprise.yaml").write_text(
+        "records:\n  objective:\n    - {id: o1, title: Atteindre 10 k€ par mois, deadline: 2027-06-30}\n",
+        encoding="utf-8",
+    )
+    (inbox / "collections--casse.csv").write_text("aucune,colonne,utile\n1,2,3\n", encoding="utf-8")
+    (inbox / "notes.txt").write_text("ignoré", encoding="utf-8")
+    results = process_inbox(app, inbox, now_label="T1")
+    by_file = {r["file"]: r for r in results}
+    assert by_file["collections--banque-novembre.csv"]["imported"] == 3
+    assert by_file["campaigns--google.csv"]["imported"] == 2
+    assert by_file["entreprise.yaml"]["records"] == {"objective": 1}
+    assert by_file["collections--casse.csv"]["status"] == "erreur"
+    assert (inbox / "erreurs" / "T1-collections--casse.csv.erreur.txt").read_text(encoding="utf-8")
+    assert sorted(p.name for p in (inbox / "importes").iterdir()) == [
+        "T1-campaigns--google.csv",
+        "T1-collections--banque-novembre.csv",
+        "T1-entreprise.yaml",
+    ]
+    assert (inbox / "notes.txt").exists()  # les fichiers non reconnus ne sont pas touchés
+    assert process_inbox(app, inbox) == []  # rien n'est retraité
+    assert process_inbox(app, tmp_path / "absent") == []
+
+
+def test_cli_inbox(tmp_path):
+    home = tmp_path / "home"
+    (home / "inbox").mkdir(parents=True)
+    (home / "inbox" / "collections.csv").write_bytes(BANK_FR)
+    result = CliRunner().invoke(cli, ["data", "inbox"], env={"SOVEREIGN_HOME": str(home)})
+    assert result.exit_code == 0, result.output
+    assert '"importé"' in result.output

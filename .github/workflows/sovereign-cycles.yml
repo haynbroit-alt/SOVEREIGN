@@ -68,6 +68,10 @@ jobs:
               fi
               ;;
           esac
+          # Boîte de dépôt : fichiers ajoutés dans inbox/ sur la branche sovereign-state (interface web GitHub).
+          if [ -d "$SOVEREIGN_HOME/inbox" ]; then
+            uv run sovereign data inbox | tee "$SOVEREIGN_HOME/derniere-importation.json"
+          fi
           uv run sovereign tick
           uv run sovereign status | tee "$SOVEREIGN_HOME/status.txt"
 
