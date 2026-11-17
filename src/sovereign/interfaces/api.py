@@ -61,6 +61,10 @@ class EventRequest(BaseModel):
     dedup_key: str | None = None
 
 
+REVENUE_ACTIONS = frozenset({("finance-budget", "record_revenue"), ("finance-budget", "collect_invoice")})
+"""Actions qui ouvrent du budget : réservées à la portée admin (même niveau qu'une validation humaine)."""
+
+
 def _extract_key(request: Request) -> str | None:
     header = request.headers.get("authorization", "")
     if header.lower().startswith("bearer "):
@@ -157,6 +161,8 @@ def create_api(app: "Sovereign", *, mount_mcp: bool = True, mcp_host: str = "127
         spec = app.kernel.registry.get(name).spec(action)
         if spec.risk != "read_only" and not who.allows("write"):
             raise HTTPException(status_code=403, detail="portée « write » requise pour cette action")
+        if (name, action) in REVENUE_ACTIONS and not who.allows("admin"):
+            raise HTTPException(status_code=403, detail="portée « admin » requise : un encaissement ouvre du budget")
         return app.kernel.run_skill(name, action, payload, caller=f"api:{who.name}").model_dump(mode="json")
 
     @api.get("/v1/budget", tags=["finances"])
@@ -164,7 +170,9 @@ def create_api(app: "Sovereign", *, mount_mcp: bool = True, mcp_host: str = "127
         return app.kernel.finance.status().model_dump(mode="json")
 
     @api.post("/v1/finance/revenues", tags=["finances"])
-    def add_revenue(body: RevenueRequest, who: Writer) -> dict[str, Any]:
+    def add_revenue(body: RevenueRequest, who: Admin) -> dict[str, Any]:
+        """Déclarer un encaissement réel : portée admin (il ouvre du budget, comme une validation humaine)."""
+
         entry = app.kernel.finance.record_collection(
             body.amount,
             body.date,

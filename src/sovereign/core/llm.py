@@ -11,6 +11,7 @@ Règles :
 
 from __future__ import annotations
 
+import json
 import logging
 from collections.abc import Callable
 from decimal import Decimal
@@ -67,9 +68,17 @@ def strict_schema(model: type[BaseModel]) -> dict[str, Any]:
     return clean(model.model_json_schema())
 
 
-def estimate_cost(model: str, input_chars: int, max_output_tokens: int) -> Decimal:
-    price_in, price_out = PRICES_USD_PER_MTOK.get(model, max(PRICES_USD_PER_MTOK.values()))
-    input_tokens = Decimal(input_chars) / Decimal("3") + 200  # estimation prudente
+def estimate_cost(model: str, input_chars: int, max_output_tokens: int, *, fallback: bool = False) -> Decimal:
+    """Majorant du coût : c'est le montant réservé, et le réel déclaré ne peut pas le dépasser.
+
+    Avec le repli côté serveur, un autre modèle peut répondre : on réserve au tarif le plus élevé connu.
+    """
+
+    if fallback:
+        price_in, price_out = max(PRICES_USD_PER_MTOK.values())
+    else:
+        price_in, price_out = PRICES_USD_PER_MTOK.get(model, max(PRICES_USD_PER_MTOK.values()))
+    input_tokens = Decimal(input_chars) / Decimal("2") + 500  # majorant : ≥ 1 jeton pour 2 caractères
     cost = (input_tokens * price_in + Decimal(max_output_tokens) * price_out) / Decimal(1_000_000)
     return to_decimal(max(cost * USD_RATE, Decimal("0.01")))
 
@@ -95,6 +104,7 @@ class LLMGateway:
         self.refusals = 0
         self.denied_by_budget = 0
         self.spent = Decimal("0")
+        self.overrun = Decimal("0")
 
     @property
     def available(self) -> bool:
@@ -126,7 +136,8 @@ class LLMGateway:
         if not self.available:
             return None
         model = self.settings.model
-        estimate = estimate_cost(model, len(system) + len(prompt), max_tokens)
+        schema = strict_schema(output_model)
+        estimate = estimate_cost(model, len(system) + len(prompt) + len(json.dumps(schema)), max_tokens, fallback=True)
         if estimate > self.settings.max_cost_per_call:
             log.info(
                 "appel LLM ignoré : coût max estimé %s > plafond %s",
@@ -159,7 +170,7 @@ class LLMGateway:
                 fallbacks="default",
                 output_config={
                     "effort": self.settings.effort,
-                    "format": {"type": "json_schema", "schema": strict_schema(output_model)},
+                    "format": {"type": "json_schema", "schema": schema},
                 },
             )
         except Exception as exc:
@@ -168,9 +179,14 @@ class LLMGateway:
             return None
         self.calls += 1
         usage = getattr(response, "usage", None)
-        cost = actual_cost(model, getattr(usage, "input_tokens", 0) or 0, getattr(usage, "output_tokens", 0) or 0)
-        self.finance.confirm_spent(expense_id, min(cost, decision.expense.amount), actor="sovereign-llm")
-        self.spent += min(cost, decision.expense.amount)
+        served = str(getattr(response, "model", None) or model)  # modèle de repli éventuel : son propre tarif
+        cost = actual_cost(served, getattr(usage, "input_tokens", 0) or 0, getattr(usage, "output_tokens", 0) or 0)
+        approved = decision.expense.amount
+        self.finance.confirm_spent(expense_id, min(cost, approved), actor="sovereign-llm")
+        self.spent += cost
+        if cost > approved:  # ne devrait pas arriver (majorant) : rendu visible, jamais silencieux
+            log.error("coût LLM réel %s > réservé %s (%s)", cost, approved, served)
+            self.overrun += cost - approved
         if getattr(response, "stop_reason", None) == "refusal":
             self.refusals += 1
             return None

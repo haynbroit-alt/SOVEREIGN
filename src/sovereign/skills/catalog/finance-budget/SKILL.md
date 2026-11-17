@@ -79,6 +79,11 @@ Toutes les sorties portent aussi `summary`, `insights`, `recommendations` et `me
 ## Sécurité
 
 - Aucune intégration bancaire, aucun moyen de paiement : la Skill ne peut pas déplacer d'argent.
+- **Un agent IA ne déclare jamais d'encaissement** (il ouvrirait son propre budget) : refus au cœur du registre pour
+  les acteurs `mcp`, `director`, `worker`, `cycle`, `agent:*` ; pas d'outil MCP d'encaissement ; portée API `admin`.
+  Les encaissements viennent d'un humain (CLI, API admin, fichier déposé) ou d'un webhook Stripe signé.
+- Import de relevé : les débits sont ignorés et les crédits qui ne sont pas des ventes (prêt, apport, virement
+  interne, remboursement fiscal) exclus et signalés.
 - Une dépense > 50 % du disponible part en **revue humaine** ; l'approbation re-vérifie le disponible.
 - Les appels LLM sont eux-mêmes des dépenses soumises à ce garde-fou (catégorie `ia`).
 - Devise unique par registre : aucune conversion implicite.

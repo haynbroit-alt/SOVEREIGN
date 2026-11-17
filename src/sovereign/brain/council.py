@@ -12,7 +12,8 @@ historique des résultats, capacité d'exécution) — pas d'opinions gratuites 
 
 Déroulé : déclarations d'ouverture → réfutations (chaque membre répond à l'argument opposé le plus fort ;
 s'il ne peut le contrer, il nuance sa position) → vote pondéré par la pertinence du sujet pour chaque membre →
-verdict. Un veto (budget dépassé, perte probable > 50 %, irréversible et incertain) bloque l'adoption.
+verdict. Un veto (budget dépassé ; perte probable > 50 % sauf pari réversible à espérance positive ; irréversible et
+incertain) bloque l'adoption.
 
 Si la passerelle LLM est disponible et autorisée, Claude peut reformuler et compléter les arguments ; le score,
 les vetos et le verdict restent calculés de façon déterministe et auditable.
@@ -156,8 +157,18 @@ class RiskOfficer(CouncilMember):
         args: list[Argument] = []
         veto: str | None = None
         if facts.p_loss is not None:
-            if facts.p_loss > 0.5:
+            positive_bet = facts.expected_value is not None and facts.expected_value > 0 and rec.reversible
+            if facts.p_loss > 0.5 and not positive_bet:
                 veto = f"Perte probable ({facts.p_loss:.0%} des scénarios simulés)."
+            elif facts.p_loss > 0.5:
+                # Un pari réversible à espérance positive se borne par un critère d'arrêt ; on ne le bloque pas.
+                args.append(
+                    Argument(
+                        text="Pari réversible à espérance positive : acceptable avec un critère d'arrêt chiffré.",
+                        weight=0.3,
+                        polarity="pour",
+                    )
+                )
             if facts.p_loss > 0.25:
                 args.append(
                     Argument(

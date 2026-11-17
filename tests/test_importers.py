@@ -90,6 +90,24 @@ def test_payment_export_respects_status_refund_and_currency(app):
     assert "Failed" in reasons and "USD" in reasons
 
 
+def test_signed_bank_statement_counts_only_customer_sales(app):
+    # Régression (audit indépendant) : prêt compté comme revenu, débits comptés comme remboursements.
+    statement = """Date;Libellé;Montant
+03/11/2026;VIR SEPA CLIENT ACME FACTURE 12;1 500,00
+04/11/2026;DEBLOCAGE PRET PROFESSIONNEL;20 000,00
+05/11/2026;PRLV LOYER NOVEMBRE;-900,00
+06/11/2026;VIR INTERNE DEPUIS LIVRET;5 000,00
+07/11/2026;REMBOURSEMENT CREDIT DE TVA DGFIP;800,00
+08/11/2026;REMBOURSEMENT CLIENT ACME (avoir);-100,00
+"""
+    report = import_csv(app, "collections", statement)
+    assert report.imported == 2  # la vente et le remboursement client
+    assert app.kernel.finance.collected_total() == Decimal("1400.00")
+    assert app.kernel.finance.envelope() == Decimal("140.00")
+    reasons = " ".join(report.skipped)
+    assert reasons.count("crédit non commercial") == 3 and "débit ignoré" in reasons
+
+
 def test_future_dated_rows_are_rejected_not_fatal(app):
     report = import_csv(app, "collections", "date,amount\n2027-01-01,100\n2026-11-01,50\n")
     assert report.imported == 1 and any("futur" in s for s in report.skipped)

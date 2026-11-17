@@ -9,6 +9,9 @@ import pytest
 from sovereign.app import Sovereign
 from sovereign.ecosystem import overlaps, scan_ecosystem, scan_repository
 
+# Clé factice au format réaliste, assemblée à l'exécution : le fichier source ne contient aucun secret détectable.
+FAKE_KEY = "sk-" + "ant-api03-" + "Qm7xK2pL9vR4tW8nZ3cY6bH1jF5dS0gA"
+
 
 def _repo(root: Path, name: str, files: dict[str, str]) -> Path:
     path = root / name
@@ -67,7 +70,7 @@ def ecosystem(tmp_path):
         {
             "README.md": ENGINE_DOC,
             "moteurs/cortex/package.json": json.dumps({"name": "cortex-engine"}),
-            "config.py": 'API_KEY = "sk-ant-api03-abcdefghijklmnopqrstuvwxyz0123"\n',
+            "config.py": f'API_KEY = "{FAKE_KEY}"\n',
         },
     )
     return root
@@ -89,8 +92,9 @@ def test_secrets_detected_but_placeholders_ignored(tmp_path):
         root,
         "x",
         {
-            "a.py": 'API_KEY = "sk-ant-api03-abcdefghijklmnopqrstuvwxyz0123"\n',
+            "a.py": f'API_KEY = "{FAKE_KEY}"\n',
             "b.py": 'token = "your-token-here-xxxxxxxx"\nkey = process.env.API_KEY\n',
+            "c.py": 'API_KEY = "sk-ant-api03-abcdefghijklmnopqrstuvwxyz0123"\n',  # suite croissante : exemple
         },
     )
     facts = scan_repository(root / "x")
@@ -158,9 +162,18 @@ def test_assessments_join_judgement_and_drive_portfolio(ecosystem, tmp_path):
                     "tests_run": True,
                     "tests_total": 40,
                     "tests_passed": 38,
+                    "tests_failed": 2,
                     "verdict": "develop",
                 },
-                {"repo": "moteur", "commercial_potential": 2, "effort_to_mvp_weeks": 10, "verdict": "freeze"},
+                {
+                    "repo": "moteur",
+                    "commercial_potential": 2,
+                    "effort_to_mvp_weeks": 10,
+                    "verdict": "freeze",
+                    "tests_run": True,
+                    "tests_total": 10,
+                    "tests_passed": 7,
+                },
                 {"repo": "copie", "commercial_potential": 1, "effort_to_mvp_weeks": 12, "verdict": "freeze"},
                 {"repo": "absent", "commercial_potential": 9},
             ]
@@ -176,6 +189,8 @@ def test_assessments_join_judgement_and_drive_portfolio(ecosystem, tmp_path):
         assert produit["assessment"]["analyst"] == "audit"
         assert produit["repo"]["tests_failed"] == 2  # faits mesurés par l'analyste
         assert [k["value"] for k in produit["kpis"] if k["name"] == "tests réussis"] == [0.95]
+        moteur = app.kernel.store.get("project", "repo-moteur")["repo"]
+        assert moteur["tests_failed"] is None and moteur["tests_not_passed"] == 3  # ignorés ≠ échecs
         out = app.kernel.run_skill("business-development", "portfolio_review", {})
         verdicts = {d.project_id: d.verdict for d in out.decisions}
         assert verdicts["repo-produit"] == "développer"

@@ -152,10 +152,23 @@ def test_csv_import_over_api_and_mcp(app, api):
 
     async def scenario():
         async with Client(build_mcp(app)) as client:
-            res = await client.call_tool(
+            # Un agent ne déclare jamais d'encaissement : il ouvrirait son propre budget.
+            refused = await client.call_tool(
                 "import_csv", {"kind": "collections", "csv_text": "date,amount\n2026-11-04,200\n"}
             )
-            assert res.structured_content["imported"] == 1
+            assert refused.is_error
+            tools = {t.name for t in (await client.list_tools()).tools}
+            assert "record_revenue" not in tools
+            via_skill = await client.call_tool(
+                "skill_run", {"skill": "finance-budget", "action": "record_revenue", "input": {"amount": "500"}}
+            )
+            assert via_skill.is_error
+            ok = await client.call_tool("import_csv", {"kind": "segment", "csv_text": "id,name\ns1,PME\n"})
+            assert ok.structured_content["imported"] == 1
 
     asyncio.run(scenario())
-    assert str(app.kernel.finance.collected_total()) == "9700.00"
+    assert str(app.kernel.finance.collected_total()) == "9500.00"  # inchangé par l'agent
+    revenue = {"amount": "100", "reference": "virement-42"}
+    assert api.post("/v1/finance/revenues", headers=writer, json=revenue).status_code == 403
+    assert api.post("/v1/skills/finance-budget/record_revenue", headers=writer, json=revenue).status_code == 403
+    assert api.post("/v1/finance/revenues", headers=admin, json=revenue).status_code == 200

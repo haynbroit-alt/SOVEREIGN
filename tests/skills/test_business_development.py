@@ -290,7 +290,7 @@ def test_portfolio_review_rules(kernel):
         "hive": "fusionner",  # doublon de ref avec un actif propre
         "cortex": "geler",  # doublon de tr, sans actif propre
         "tr": "geler",  # potentiel 3 pour 6 semaines
-        "mondo": "archiver",  # idée sans code, potentiel ≤ 3
+        "mondo": "geler",  # idée sans code : gelée, l'archivage est réservé aux potentiels ≤ 1,5
         "artiste": "archiver",
     }
     assert out.focus == ["Ref", "Paie"]
@@ -304,6 +304,7 @@ def test_portfolio_review_rules(kernel):
     assert any(d.startswith("Tr :") for d in out.divergences)
     assert verdicts["inconnu"].ai_verdict is None and verdicts["inconnu"].agrees_with_ai is None
     assert out.metrics["portfolio.focus"] == 2
+    assert verdicts["mondo"].agrees_with_ai is True
     titles = [r.title for r in out.recommendations]
     assert any(t.startswith("Concentrer l'effort sur « Ref » et « Paie »") for t in titles)
     assert any("Fusionner « Hive » dans « Ref »" in t for t in titles)
@@ -344,3 +345,44 @@ def test_portfolio_review_empty_and_assess(kernel):
     assessed = kernel.run_skill(SKILL, "assess", {})
     assert assessed.projects == 2 and "Focus : A." in assessed.summary
     assert kernel.store.get("project", "repo-a").get("portfolio_status") is None  # assess ne modifie rien
+
+
+def test_portfolio_review_deadline_and_unassessed_peer(kernel, clock):
+    noel = _project("maison", potential=5, effort=1.5, verdict="develop", maturity="mvp")
+    noel["assessment"]["deadline"] = "2026-12-20"  # horloge de test : 17/11/2026
+    _seed(
+        kernel,
+        noel,
+        _project("velyx", potential=3, effort=6, overlaps_with=["sovereign"], verdict="freeze"),
+        _project("sovereign"),  # non évalué : ni gelé par un pair, ni utilisé pour en geler un autre
+    )
+    out = kernel.run_skill(SKILL, "portfolio_review", {})
+    maison = next(d for d in out.decisions if d.name == "Maison")
+    assert maison.verdict == "valider le marché" and maison.agrees_with_ai is True  # « develop » = investir
+    assert maison.days_left == 33 and any("échéance le 20/12/2026 (33 j)" in r for r in maison.reasons)
+    test = next(r for r in out.recommendations if r.title.startswith("Tester le marché de « Maison »"))
+    assert test.urgency == 10 and "(avant le 20/12)" in test.title
+    verdicts = {d.name: d for d in out.decisions}
+    assert verdicts["Sovereign"].verdict == "évaluer"
+    assert verdicts["Velyx"].verdict == "geler" and verdicts["Velyx"].merge_into is None
+
+
+def test_portfolio_review_internal_tool_absorbs_weak_duplicates(kernel):
+    hub = _project("hub", potential=2, effort=14, verdict="develop")
+    hub["assessment"]["role"] = "internal"
+    _seed(
+        kernel,
+        hub,
+        _project(
+            "essaim", potential=2, effort=10, overlaps_with=["hub"], complementary="canal Telegram", verdict="merge"
+        ),
+        _project("prospect", potential=3, effort=2, overlaps_with=["hub"], verdict="freeze"),
+        _project("produit", potential=6, effort=6, overlaps_with=["hub"], verdict="develop"),
+    )
+    out = kernel.run_skill(SKILL, "portfolio_review", {})
+    verdicts = {d.name: d for d in out.decisions}
+    assert verdicts["Hub"].verdict == "maintenir" and verdicts["Hub"].agrees_with_ai is True
+    assert verdicts["Essaim"].verdict == "fusionner" and verdicts["Essaim"].merge_into == "Hub"
+    assert verdicts["Prospect"].verdict == "valider le marché" and verdicts["Prospect"].merge_into == "Hub"
+    assert verdicts["Produit"].verdict == "développer"  # un vrai produit n'est jamais absorbé par l'outil interne
+    assert out.focus == ["Produit"]

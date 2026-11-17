@@ -20,8 +20,8 @@ class Answer(BaseModel):
 
 
 class FakeMessages:
-    def __init__(self, text: str, stop_reason: str = "end_turn", fail: bool = False) -> None:
-        self.text, self.stop_reason, self.fail = text, stop_reason, fail
+    def __init__(self, text: str, stop_reason: str = "end_turn", fail: bool = False, served: str | None = None) -> None:
+        self.text, self.stop_reason, self.fail, self.served = text, stop_reason, fail, served
         self.calls: list[dict] = []
 
     def create(self, **kwargs):
@@ -29,6 +29,7 @@ class FakeMessages:
         if self.fail:
             raise RuntimeError("réseau indisponible")
         return SimpleNamespace(
+            model=self.served or kwargs["model"],
             stop_reason=self.stop_reason,
             usage=SimpleNamespace(input_tokens=1200, output_tokens=300),
             content=[SimpleNamespace(type="text", text=self.text)],
@@ -75,6 +76,16 @@ def test_successful_call_is_budgeted_and_cost_recorded(clock):
     assert len(spent) == 1 and spent[0].status == "spent"
     assert spent[0].actual == actual_cost("claude-opus-5-5", 1200, 300)
     assert spent[0].actual <= spent[0].amount  # le réel ne dépasse jamais l'estimation autorisée
+
+
+def test_fallback_model_is_billed_at_its_own_price_within_reservation(clock):
+    # Régression (audit indépendant) : le coût d'un modèle de repli était calculé au tarif du modèle demandé.
+    messages = FakeMessages('{"verdict": "ok", "points": []}', served="claude-fable-5-2")
+    kernel = _kernel(clock, messages)
+    kernel.llm.structured("système", "question", Answer, purpose="test", max_tokens=1000)
+    spent = next(e for e in kernel.finance.expenses() if e.category == "ia")
+    assert spent.actual == actual_cost("claude-fable-5-2", 1200, 300)
+    assert spent.actual <= spent.amount and kernel.llm.overrun == 0  # réservation au tarif le plus élevé
 
 
 def test_no_budget_means_no_ai_call(clock):

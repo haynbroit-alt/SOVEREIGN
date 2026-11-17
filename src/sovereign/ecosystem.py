@@ -22,7 +22,7 @@ import tomllib
 from collections import Counter
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
-from itertools import combinations
+from itertools import combinations, pairwise
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -69,6 +69,22 @@ SECRET_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ),
 ]
 PLACEHOLDER_RE = re.compile(r"(?i)(x{4,}|your|example|exemple|changeme|placeholder|dummy|<|\$\{|process\.env|test)")
+
+
+def _is_fake(value: str) -> bool:
+    """Valeur factice : marqueur explicite, ou suite croissante de 6 caractères (« abcdef », « 123456 »).
+
+    Une vraie clé aléatoire ne contient pratiquement jamais une telle suite ; les exemples et les tests, si.
+    """
+
+    if PLACEHOLDER_RE.search(value):
+        return True
+    run, low = 1, value.lower()
+    for previous, current in pairwise(low):
+        run = run + 1 if current.isalnum() and ord(current) == ord(previous) + 1 else 1
+        if run >= 6:
+            return True
+    return False
 
 
 @dataclass
@@ -213,7 +229,7 @@ def scan_repository(path: str | Path, now: datetime | None = None) -> RepoFacts:
                     label
                     for label, pattern in SECRET_PATTERNS
                     for match in pattern.finditer(text)
-                    if not PLACEHOLDER_RE.search(match.group(match.lastindex or 0))
+                    if not _is_fake(match.group(match.lastindex or 0))
                 ),
                 None,
             )
@@ -483,6 +499,8 @@ _ASSESSMENT_FIELDS = (
     "complementary_to_sovereign",
     "security_issues",
     "correctness_issues",
+    "deadline",
+    "role",
 )
 
 
@@ -507,7 +525,12 @@ def apply_assessments(app: Sovereign, assessments: list[dict[str, Any]], *, anal
         total, passed = item.get("tests_total"), item.get("tests_passed")
         if item.get("tests_run") and isinstance(total, int) and isinstance(passed, int) and total > 0:
             repo = project.setdefault("repo", {})
-            repo["tests_passed"], repo["tests_failed"] = passed, total - passed
+            failed = item.get("tests_failed")
+            if failed is None and "tests_skipped" in item:
+                failed = total - passed - int(item["tests_skipped"])
+            # Sans détail, « non réussi » peut être un test ignoré : jamais compté comme un échec.
+            repo["tests_passed"], repo["tests_failed"] = passed, failed
+            repo["tests_not_passed"] = total - passed
             project["kpis"] = [k for k in project.get("kpis", []) if k.get("name") != "tests réussis"] + [
                 {
                     "name": "tests réussis",

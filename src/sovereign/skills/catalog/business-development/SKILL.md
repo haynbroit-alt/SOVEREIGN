@@ -47,16 +47,22 @@ Le développeur d'activité du directeur. Méthodes explicites et chiffrées :
   futurs ».
 - **Revue de portefeuille** (`portfolio_review`, projets du kind `project`, par ex. issus de
   `sovereign ecosystem scan` + `assess`). Règles explicites, dans l'ordre :
+  0. **Outil interne** (`assessment.role: internal`, ex. SOVEREIGN lui-même) : **maintenu**, jugé sur l'usage
+     réel et non sur le potentiel commercial ; jamais gelé comme doublon, il absorbe les doublons sans cas
+     commercial propre (potentiel < 4).
   1. **Test bon marché d'abord** : potentiel ≥ 3, test ≤ 3 semaines et du code existant → **valider le marché**
      (vendre l'existant, aucun développement), même pour un doublon : la fusion se décide après le test.
   2. **Doublons** : dans chaque recouvrement fort (paquet partagé ou similarité ≥ 0,5 mesurés, ou recouvrement
      constaté par un analyste), seul le projet le mieux classé (potentiel, maturité, santé, taille) reste
      candidat ; les autres sont **à fusionner** s'ils portent un actif propre (≥ 200 lignes), sinon **gelés**.
-  3. Potentiel inconnu → **évaluer** ; idée sans code et potentiel ≤ 3 → **archiver**. **Focus** :
+     Un projet non évalué n'est jamais comparé : il est d'abord **à évaluer**.
+  3. Potentiel inconnu → **évaluer**. **Focus** :
      `rendement de l'effort = potentiel × (0,5 + confiance/2) / (1 + effort/8)` ; parmi les projets de
      potentiel ≥ 4, les `focus_limit` meilleurs (2 par défaut) sont **à développer**, les suivants **maintenus** ;
      potentiel ≤ 1,5 → **archiver** ; sinon **geler**.
-  4. Secrets exposés ou tests en échec → **bloquants** signalés quel que soit le verdict.
+  4. Secrets exposés ou tests en échec → **bloquants** signalés quel que soit le verdict. Une échéance
+     (`assessment.deadline` : test de Noël, expiration de barèmes…) apparaît dans les raisons et l'action ; à 45 jours ou
+     moins, le test de marché passe en urgence maximale.
   5. Le verdict des analystes (IA ou humains, champ `assessment.verdict`) est confronté au sien : chaque
      **désaccord** est listé pour arbitrage humain. Il ne remplace jamais le calcul.
 

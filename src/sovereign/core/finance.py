@@ -34,6 +34,14 @@ class FinanceError(Exception):
     pass
 
 
+AGENT_ACTORS = frozenset({"mcp", "director", "worker", "cycle", "agent"})
+"""Acteurs automatiques : ils ne peuvent jamais déclarer un encaissement, sinon ils ouvriraient leur propre budget."""
+
+
+def is_agent(actor: str) -> bool:
+    return actor in AGENT_ACTORS or actor.split(":", 1)[0] in AGENT_ACTORS
+
+
 class LedgerEntry(BaseModel):
     id: str
     entry_type: Literal["collection", "refund"]
@@ -188,6 +196,11 @@ class FinanceLedger:
         source: str,
         actor: str,
     ) -> LedgerEntry:
+        if entry_type == "collection" and is_agent(actor):
+            raise FinanceError(
+                "un agent IA ne peut pas déclarer d'encaissement (il ouvrirait son propre budget) : passez par la "
+                "CLI, l'API admin, un webhook Stripe signé ou l'import d'un fichier par un humain"
+            )
         self._check_currency(currency)
         value = to_decimal(amount)
         if value <= 0:

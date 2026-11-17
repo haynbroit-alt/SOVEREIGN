@@ -10,7 +10,9 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from datetime import date
 from decimal import Decimal
+from statistics import mean
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -758,7 +760,7 @@ class BusinessDevelopmentSkill(Skill):
                 divergences=[],
                 summary="Aucun projet : lancez « sovereign ecosystem scan » ou importez des projets.",
             )
-        out = review_portfolio(raw, data.focus_limit)
+        out = review_portfolio(raw, data.focus_limit, ctx.clock.now().date())
         counts: dict[str, int] = {}
         for decision in out.decisions:
             counts[decision.verdict] = counts.get(decision.verdict, 0) + 1
@@ -797,15 +799,8 @@ class BusinessDevelopmentSkill(Skill):
                     rationale="Meilleurs rendements de l'effort du portefeuille ; tout le reste attend.",
                     impact=8,
                     effort=2,
-                    confidence=round(
-                        sum(d.commercial_potential or 0 for d in out.decisions if d.verdict == "développer")
-                        / 10
-                        / max(1, len(out.focus))
-                        + 0.3,
-                        3,
-                    )
-                    if out.focus
-                    else 0.5,
+                    # Confiance = celle des évaluations elles-mêmes, jamais une valeur inventée.
+                    confidence=round(mean(d.confidence or 0.5 for d in out.decisions if d.verdict == "développer"), 2),
                     urgency=7,
                     risk=0.1,
                     tags=["portefeuille", "stratégie"],
@@ -844,14 +839,16 @@ class BusinessDevelopmentSkill(Skill):
                 )
             )
         for d in (d for d in out.decisions if d.verdict == "valider le marché"):
+            closing = d.days_left is not None and 0 <= d.days_left <= 45
             out.recommendations.append(
                 Recommendation(
-                    title=f"Tester le marché de « {d.name} » avant tout développement",
+                    title=f"Tester le marché de « {d.name} » avant tout développement"
+                    + (f" (avant le {d.deadline:%d/%m})" if closing and d.deadline else ""),
                     rationale=d.next_action,
                     impact=7,
                     effort=1.5,
-                    confidence=0.6,
-                    urgency=7,
+                    confidence=d.confidence or 0.5,
+                    urgency=10 if closing else 7,
                     risk=0.15,
                     external=True,
                     tags=["portefeuille", "ventes"],
@@ -1017,7 +1014,7 @@ class BusinessDevelopmentSkill(Skill):
 PortfolioVerdict = Literal["développer", "valider le marché", "maintenir", "fusionner", "geler", "archiver", "évaluer"]
 _MATURITY = {"idea": 0, "prototype": 1, "mvp": 2, "product": 3}
 _AI_FAMILY = {
-    "develop": {"développer", "maintenir"},
+    "develop": {"développer", "maintenir", "valider le marché"},
     "merge": {"fusionner"},
     "freeze": {"geler", "valider le marché", "maintenir"},
     "archive": {"archiver", "geler"},
@@ -1040,9 +1037,12 @@ class PortfolioDecision(BaseModel):
     commercial_potential: float | None
     effort_weeks: float | None
     return_on_effort: float | None
+    confidence: float | None = None
     health: float | None
     blocking: list[str]
     merge_into: str | None = None
+    deadline: date | None = Field(None, description="Échéance : fenêtre commerciale, expiration de règles…")
+    days_left: int | None = None
     ai_verdict: str | None = None
     agrees_with_ai: bool | None = None
 
@@ -1096,6 +1096,11 @@ class _Project:
         self.complementary = str(
             self.assessment.get("complementary_to_sovereign") or self.assessment.get("complementary") or ""
         ).strip()
+        self.internal = str(self.assessment.get("role", "")).lower() in ("internal", "interne")
+        try:
+            self.deadline: date | None = date.fromisoformat(str(self.assessment["deadline"]))
+        except (KeyError, ValueError):
+            self.deadline = None
 
     def rank_key(self) -> tuple[float, int, float, int]:
         return (self.potential if self.potential is not None else -1.0, self.maturity, self.health or 0.0, self.loc)
@@ -1110,23 +1115,36 @@ class _Project:
 def _strong_links(projects: list[_Project]) -> dict[str, set[str]]:
     """Recouvrements FORTS : paquet partagé / similarité ≥ 0,5, ou recouvrement constaté par un analyste."""
 
-    by_repo = {p.repo_name.lower(): p for p in projects} | {p.name.lower(): p for p in projects}
+    def key(text: str) -> str:
+        return re.sub(r"[^a-z0-9]+", "", text.lower().split("/")[-1])
+
+    keys = [(key(p.repo_name), p) for p in projects] + [(key(p.name), p) for p in projects]
+
+    def resolve(name: str) -> _Project | None:
+        wanted = key(name)
+        exact = next((p for k, p in keys if k == wanted), None)
+        if exact or len(wanted) < 4:
+            return exact
+        # « velyx » désigne le dépôt « velyx-prospection- » : préfixe non ambigu seulement.
+        found = {p.id: p for k, p in keys if k.startswith(wanted)}
+        return next(iter(found.values())) if len(found) == 1 else None
+
     links: dict[str, set[str]] = {p.id: set() for p in projects}
     for project in projects:
         for item in project.raw.get("overlaps") or []:  # type: ignore[attr-defined]
-            other = by_repo.get(str(item.get("repo", "")).lower())
-            if other and float(item.get("score", 0)) >= 0.5:
+            other = resolve(str(item.get("repo", "")))
+            if other and other.id != project.id and float(item.get("score", 0)) >= 0.5:
                 links[project.id].add(other.id)
                 links[other.id].add(project.id)
         for name in project.assessment.get("overlaps_with") or []:  # type: ignore[attr-defined]
-            other = by_repo.get(str(name).lower().split("/")[-1])
+            other = resolve(str(name))
             if other and other.id != project.id:
                 links[project.id].add(other.id)
                 links[other.id].add(project.id)
     return links
 
 
-def review_portfolio(raw_projects: list[dict[str, object]], focus_limit: int) -> PortfolioOutput:
+def review_portfolio(raw_projects: list[dict[str, object]], focus_limit: int, today: date) -> PortfolioOutput:
     projects = [_Project(r) for r in raw_projects]
     by_id = {p.id: p for p in projects}
     links = _strong_links(projects)
@@ -1138,6 +1156,13 @@ def review_portfolio(raw_projects: list[dict[str, object]], focus_limit: int) ->
         blocking = [f"secrets exposés ({len(p.secrets)})"] if p.secrets else []
         if p.tests_failed:
             blocking.append(f"{p.tests_failed} test(s) en échec")
+        days_left = (p.deadline - today).days if p.deadline else None
+        if p.deadline is not None and days_left is not None and verdict not in ("geler", "archiver"):
+            if days_left >= 0:
+                reasons = [*reasons, f"échéance le {p.deadline:%d/%m/%Y} ({days_left} j)"]
+                action = f"{action} Échéance : {p.deadline:%d/%m/%Y}."
+            else:
+                reasons = [*reasons, f"échéance dépassée depuis le {p.deadline:%d/%m/%Y}"]
         decisions[p.id] = PortfolioDecision(
             project_id=p.id,
             name=p.name,
@@ -1147,17 +1172,42 @@ def review_portfolio(raw_projects: list[dict[str, object]], focus_limit: int) ->
             commercial_potential=p.potential,
             effort_weeks=p.effort,
             return_on_effort=p.return_on_effort(),
+            confidence=p.confidence if p.potential is not None else None,
             health=p.health,
             blocking=blocking,
             merge_into=merge_into,
+            deadline=p.deadline,
+            days_left=days_left,
         )
 
     def best_peer(p: _Project) -> _Project | None:
-        better = [by_id[i] for i in links[p.id] if by_id[i].rank_key() > p.rank_key()]
-        return max(better, key=lambda q: q.rank_key()) if better else None
+        """Pair évalué qui domine ``p`` ; un projet non évalué n'est jamais comparé (il est d'abord à évaluer)."""
+
+        if p.potential is None or p.internal:
+            return None
+        better = [
+            q
+            for q in (by_id[i] for i in links[p.id])
+            # Un outil interne absorbe les doublons sans cas commercial propre (potentiel < 4).
+            if (q.internal and p.potential < 4) or (q.potential is not None and q.rank_key() > p.rank_key())
+        ]
+        return max(better, key=lambda q: (q.internal, q.rank_key())) if better else None
+
+    # 0. Outils internes : jugés sur l'usage réel, jamais mis en concurrence commerciale ni gelés comme doublons.
+    for p in projects:
+        if p.internal:
+            decide(
+                p,
+                "maintenir",
+                ["outil interne : jugé sur l'usage réel, pas sur le potentiel commercial"],
+                "Corriger les bloquants et l'utiliser sur des données réelles ; aucune nouvelle fonctionnalité sans "
+                "besoin mesuré.",
+            )
 
     # 1. Test de marché bon marché d'abord : l'information vaut plus que le code (doublon ou non).
     for p in projects:
+        if p.id in decisions:
+            continue
         if p.potential is not None and p.potential >= 3 and p.effort is not None and p.effort <= 3 and p.loc >= 50:
             best = best_peer(p)
             reasons = [f"potentiel {p.potential:g}/10, test bon marché ({p.effort:g} sem.)"]
@@ -1175,11 +1225,17 @@ def review_portfolio(raw_projects: list[dict[str, object]], focus_limit: int) ->
         best = best_peer(p) if p.id not in decisions else None
         if best is None:
             continue
+        if best.internal:
+            edge = "outil interne existant, sans cas commercial propre"
+        elif (best.potential or 0) > (p.potential or 0):
+            edge = "plus prometteur"
+        else:
+            edge = "même potentiel, plus abouti"
         if p.complementary and p.loc >= 200:
             decide(
                 p,
                 "fusionner",
-                [f"recouvre « {best.name} », plus prometteur", f"actif propre à récupérer : {p.complementary}"],
+                [f"recouvre « {best.name} » ({edge})", f"actif propre à récupérer : {p.complementary}"],
                 f"Porter « {p.complementary} » dans « {best.name} », puis archiver.",
                 merge_into=best.name,
             )
@@ -1187,7 +1243,7 @@ def review_portfolio(raw_projects: list[dict[str, object]], focus_limit: int) ->
             decide(
                 p,
                 "geler",
-                [f"recouvre « {best.name} », plus prometteur ou plus abouti"],
+                [f"recouvre « {best.name} » ({edge})"],
                 f"Geler ; réutiliser au besoin depuis « {best.name} ».",
                 merge_into=best.name,
             )
@@ -1198,8 +1254,6 @@ def review_portfolio(raw_projects: list[dict[str, object]], focus_limit: int) ->
             verdict: PortfolioVerdict = "évaluer"
             why = ["aucune évaluation commerciale"] + (["pas de code"] if p.loc < 50 else [])
             decide(p, verdict, why, "Évaluer le potentiel commercial (acheteur, prix, concurrents) avant d'investir.")
-        elif p.loc < 50 and p.potential <= 3:
-            decide(p, "archiver", ["idée sans code ni potentiel démontré"], "Archiver ; noter l'idée en mémoire.")
     candidates = sorted(
         (p for p in remaining if p.id not in decisions and p.potential is not None and p.potential >= 4),
         key=lambda p: -(p.return_on_effort() or 0),
