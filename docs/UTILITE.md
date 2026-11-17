@@ -17,6 +17,16 @@ repère une fonctionnalité inutile dans vos produits repère une Skill ou une c
 Les Skills dont les décisions réussissent gagnent un bonus de sélection (a posteriori bêta) ; celles qui
 échouent en perdent : l'utilité mesurée oriente directement le comportement.
 
+## Boucle d'apprentissage fermée
+
+Les recommandations portent, quand c'est possible, une **métrique cible** (`TargetMetric`) : risques critiques,
+conflits d'équipes, santé des projets, coût des fonctionnalités inutiles, ROAS et CAC, dépendances obsolètes,
+tendance des encaissements, créances, dépenses en revue, revues de décisions dues. À l'adoption (par le directeur
+ou par un humain), l'attendu chiffré est enregistré avec sa base observée et une date de revue ; à l'échéance,
+la phase MESURER compare la dernière observation à la cible, clôture la décision (succès / partiel / échec),
+et l'utilité de la Skill émettrice est mise à jour — **sans saisie humaine**. Démontré par
+`tests/test_brain.py::test_learning_loop_closes_automatically`.
+
 ## Mesure sur l'espace de démonstration (entreprise fictive, 2026-11-17)
 
 Scénario : import de la démo, une boucle du directeur en mode approfondi, les trois cycles, puis les 15

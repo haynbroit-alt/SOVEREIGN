@@ -62,6 +62,9 @@ avec données structurées ; utilisable avec n8n, Zapier, Make, un relais Slack/
    L'état est conservé sur la branche `sovereign-state` ; les rapports sont publiés en artefacts. Les workflows
    planifiés ne s'exécutent que depuis la branche par défaut.
 
+   **Vérifié en conditions réelles** (2026-11-17, exécution n°1 sur GitHub) : cycles quotidien, hebdomadaire et
+   mensuel exécutés, 3 rapports publiés en artefact, état poussé sur `sovereign-state`, durée totale 14 s.
+
 ## Observabilité
 
 OpenTelemetry : spans `director.run`, `skill.<nom>.<action>`, `command.<nom>`, `task.<type>`. Export OTLP/HTTP

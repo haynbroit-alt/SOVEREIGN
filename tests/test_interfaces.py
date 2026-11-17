@@ -138,3 +138,24 @@ def test_cli_end_to_end(tmp_path):
     assert runner.invoke(cli, ["report", "weekly"], env=env).exit_code == 0
     assert list((tmp_path / "reports").glob("*weekly*.md"))
     assert runner.invoke(cli, ["ask", "/nope"], env=env).exit_code == 2
+
+
+def test_csv_import_over_api_and_mcp(app, api):
+    admin = {"Authorization": f"Bearer {_key(app, 'admin')}"}
+    body = "date;montant;client\n03/11/2026;1 500,00;Client API\n"
+    result = api.post("/v1/workspace/import-csv/collections", headers=admin, content=body.encode()).json()
+    assert result["imported"] == 1
+    writer = {"Authorization": f"Bearer {_key(app, 'write')}"}
+    assert api.post("/v1/workspace/import-csv/collections", headers=writer, content=b"x").status_code == 403
+
+    from mcp import Client
+
+    async def scenario():
+        async with Client(build_mcp(app)) as client:
+            res = await client.call_tool(
+                "import_csv", {"kind": "collections", "csv_text": "date,amount\n2026-11-04,200\n"}
+            )
+            assert res.structured_content["imported"] == 1
+
+    asyncio.run(scenario())
+    assert str(app.kernel.finance.collected_total()) == "9700.00"

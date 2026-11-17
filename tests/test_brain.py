@@ -328,10 +328,14 @@ def test_approved_decisions_get_review_date_and_expectation(app, clock):
 
     app.kernel.finance.record_collection("10000", "2026-11-01")
     app.kernel.run_skill("finance-budget", "assess")  # observe finance.pending_review
-    proposal = rec(title="Purger les dépenses en revue", tags=["finance"],
-                   expected_metric=TargetMetric(metric="finance.pending_review", direction="decrease", target=0))
-    approval = app.approvals.create("recommendation", proposal.title, "s",
-                                    {"recommendation": proposal.model_dump(mode="json")}, {"class": "high"})
+    proposal = rec(
+        title="Purger les dépenses en revue",
+        tags=["finance"],
+        expected_metric=TargetMetric(metric="finance.pending_review", direction="decrease", target=0),
+    )
+    approval = app.approvals.create(
+        "recommendation", proposal.title, "s", {"recommendation": proposal.model_dump(mode="json")}, {"class": "high"}
+    )
     effects = app.approvals.decide(approval.id, approve=True, actor="fondateur")
     decision = app.kernel.memory.get(effects["decision_id"])
     assert decision.review_at is not None and decision.review_at > clock.now()
