@@ -95,6 +95,7 @@ class Kernel:
                 )
                 if result is not None:
                     for rec in result.recommendations:
+                        self.store.put("recommendation", rec.id, rec)
                         self.db.execute(
                             """INSERT OR IGNORE INTO recommendation_log(id, skill, title, mission_id, status, at)
                                VALUES (?, ?, ?, ?, 'proposed', ?)""",
