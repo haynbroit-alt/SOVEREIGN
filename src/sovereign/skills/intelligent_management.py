@@ -24,6 +24,7 @@ from sovereign.skills.base import (
     Skill,
     SkillContext,
     SkillOutput,
+    TargetMetric,
     action,
 )
 
@@ -553,6 +554,7 @@ class IntelligentManagementSkill(Skill):
                             if conflict.kind == "contradiction"
                             else "Casser le cycle de dépendances"
                         ),
+                        expected_metric=TargetMetric(metric="management.conflicts", direction="decrease"),
                         rationale=conflict.detail,
                         impact=6,
                         effort=2,

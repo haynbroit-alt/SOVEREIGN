@@ -87,6 +87,17 @@ class DirectorReport(BaseModel):
 DEFAULT_SITUATION = ("finance-budget", "memory-learning")
 
 
+def expectation_for(kernel: Any, rec: Recommendation) -> dict[str, Any] | None:
+    if rec.expected_metric is None:
+        return None
+    row = kernel.db.one(
+        "SELECT value FROM observations WHERE metric = ? ORDER BY seq DESC LIMIT 1", (rec.expected_metric.metric,)
+    )
+    if row is None:
+        return None
+    return rec.expected_metric.expectation(float(row["value"]))
+
+
 class Director:
     def __init__(self, app: Sovereign) -> None:
         self.app = app
@@ -128,6 +139,11 @@ class Director:
             "SELECT at, value FROM observations WHERE metric = ? ORDER BY seq DESC LIMIT ?", (metric, limit)
         )
         return [(parse_dt(r["at"]), float(r["value"])) for r in reversed(rows)]
+
+    def _expectation(self, rec: Recommendation) -> dict[str, Any] | None:
+        """Attendu chiffré d'une décision : base = dernière valeur observée de la métrique cible."""
+
+        return expectation_for(self.kernel, rec)
 
     def _forecast(self, metrics: dict[str, float], horizon: int = 30) -> list[Forecast]:
         forecasts: list[Forecast] = []
@@ -547,6 +563,7 @@ class Director:
                     skills=[rec.skill],
                     recommendation_ids=[rec.id],
                     confidence=verdict.confidence,
+                    expected=self._expectation(rec),
                     review_at=now + timedelta(days=rec.horizon_days or 14),
                     source="director",
                 ).id

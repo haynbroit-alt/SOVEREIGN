@@ -218,6 +218,42 @@ def data_import(path: Path, home: HomeOpt = None) -> None:
         app.close()
 
 
+@data_cli.command("import-csv")
+def data_import_csv(
+    kind: Annotated[str, typer.Argument(help="collections | campaigns | <kind> (market, segment, need…)")],
+    path: Path,
+    mapping: Annotated[list[str] | None, typer.Option("--map", help="champ=colonne (répétable)")] = None,
+    decimal: Annotated[str, typer.Option(help="auto | comma | dot")] = "auto",
+    monthfirst: Annotated[bool, typer.Option(help="Dates au format américain MM/JJ/AAAA")] = False,
+    channel: Annotated[str | None, typer.Option(help="Canal par défaut des campagnes")] = None,
+    home: HomeOpt = None,
+) -> None:
+    """Importer un export CSV réel (relevé, paiements, rapport de campagnes…) sans le retoucher."""
+
+    from sovereign.importers import import_csv
+
+    if decimal not in ("auto", "comma", "dot"):
+        raise typer.BadParameter("decimal : auto | comma | dot")
+    pairs = dict(item.split("=", 1) for item in (mapping or []) if "=" in item)
+    app = _app(home)
+    try:
+        options: dict[str, Any] = {"decimal": decimal}
+        if kind in ("collections", "encaissements", "campaigns", "campagnes"):
+            options["mapping"] = pairs
+        if kind in ("collections", "encaissements"):
+            options["dayfirst"] = not monthfirst
+        if kind in ("campaigns", "campagnes"):
+            options["channel"] = channel
+        report = import_csv(app, kind, path, **options)
+        app.worker.run_once()
+        _print(report.as_dict(), True)
+    except ValueError as exc:
+        console.print(f"[red]Erreur :[/red] {exc}")
+        raise typer.Exit(2) from exc
+    finally:
+        app.close()
+
+
 @data_cli.command("export")
 def data_export(home: HomeOpt = None) -> None:
     """Exporter l'espace de travail en JSON (sortie standard)."""

@@ -203,6 +203,19 @@ def build_mcp(app: Sovereign) -> MCPServer:
         return out.model_dump(mode="json")
 
     @server.tool(
+        name="import_csv",
+        annotations=WRITE,
+        description="Importer un CSV réel collé tel quel : kind = collections (argent reçu), campaigns, ou un kind "
+        "de données (market, segment, need…). Seuls les encaissements réellement reçus sont comptés.",
+    )
+    def import_csv_tool(kind: str, csv_text: str, decimal: str = "auto") -> dict[str, Any]:
+        from sovereign.importers import import_csv
+
+        if decimal not in ("auto", "comma", "dot"):
+            raise ValueError("decimal : auto | comma | dot")
+        return import_csv(app, kind, csv_text.encode("utf-8"), decimal=decimal).as_dict()
+
+    @server.tool(
         name="pending_approvals",
         annotations=READ,
         description="Lister les validations humaines en attente (lecture seule : l'approbation est "

@@ -27,6 +27,8 @@ Utilisables partout de la même façon : CLI (`sovereign budget`), shell interac
 ```bash
 sovereign init --demo                          # espace + démonstration
 sovereign data import mes-donnees.yaml         # vos données (voir sovereign/workspace.py pour le format)
+sovereign data import-csv collections releve.csv               # export bancaire / paiements, tel quel
+sovereign data import-csv campaigns annonces.csv --channel meta_ads --map spend="Montant dépensé (EUR)"
 sovereign finance revenue 1200 --from "Client A" --reference pay_42   # encaissement RÉEL
 sovereign finance expense 80 outils --vendor "SaaS X"                 # approuvée / refusée / en revue
 sovereign finance review exp_… --approve       # décision humaine

@@ -293,3 +293,50 @@ def test_approval_flow_creates_expense_and_memory(app):
     assert app.kernel.memory.get(effects["decision_id"]).source == "human:fondateur"
     with pytest.raises(ValueError):
         app.approvals.decide(approval.id, approve=False, actor="x")
+
+
+def test_learning_loop_closes_automatically(app, clock):
+    """Décision → échéance → nouveaux faits → mesure automatique → apprentissage → utilité de la Skill."""
+
+    _declining(app)
+    report = app.director.run("Comment vont nos encaissements et le budget ?")
+    adopted = [d for d in report.decisions if d.priority.recommendation.title == "Enrayer la baisse des encaissements"]
+    assert adopted and adopted[0].decision_id
+    decision = app.kernel.memory.get(adopted[0].decision_id)
+    assert decision.expected is not None and decision.expected.metric == "finance.collections_trend"
+    assert decision.expected.baseline < 0 and decision.expected.target == 0.0
+    clock.advance(days=21)
+    app.kernel.finance.record_collection("9000", "2026-12-05")  # les encaissements repartent
+    later = app.director.run("Point budget et encaissements")
+    closed = [m for m in later.measured if m["decision_id"] == decision.id]
+    assert closed and closed[0]["status"] == "succeeded"
+    assert app.kernel.skill_utility()["finance-budget"]["succeeded"] >= 1
+    assert app.kernel.skill_priors()["finance-budget"] > 0.5  # l'utilité mesurée oriente la sélection future
+
+
+def test_target_metric_expectation_rules():
+    from sovereign.skills.base import TargetMetric
+
+    assert TargetMetric(metric="m", direction="increase", target=0.0).expectation(-0.2)["target"] == 0.0
+    # cible déjà atteinte → amélioration relative depuis la base
+    assert TargetMetric(metric="m", direction="decrease", target=5).expectation(3)["target"] == pytest.approx(2.7)
+    assert TargetMetric(metric="m", direction="increase").expectation(0)["target"] == pytest.approx(0.1)
+
+
+def test_approved_decisions_get_review_date_and_expectation(app, clock):
+    from sovereign.skills.base import TargetMetric
+
+    app.kernel.finance.record_collection("10000", "2026-11-01")
+    app.kernel.run_skill("finance-budget", "assess")  # observe finance.pending_review
+    proposal = rec(
+        title="Purger les dépenses en revue",
+        tags=["finance"],
+        expected_metric=TargetMetric(metric="finance.pending_review", direction="decrease", target=0),
+    )
+    approval = app.approvals.create(
+        "recommendation", proposal.title, "s", {"recommendation": proposal.model_dump(mode="json")}, {"class": "high"}
+    )
+    effects = app.approvals.decide(approval.id, approve=True, actor="fondateur")
+    decision = app.kernel.memory.get(effects["decision_id"])
+    assert decision.review_at is not None and decision.review_at > clock.now()
+    assert decision.expected is not None and decision.expected.metric == "finance.pending_review"

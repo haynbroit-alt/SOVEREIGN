@@ -22,6 +22,7 @@ from sovereign.skills.base import (
     Skill,
     SkillContext,
     SkillOutput,
+    TargetMetric,
     action,
 )
 
@@ -148,6 +149,7 @@ class FinanceBudgetSkill(Skill):
             "finance.available": float(status.available),
             "finance.utilization": status.utilization,
             "finance.receivables": float(status.receivables),
+            "finance.pending_review": float(status.pending_review),
         }
         for alert in status.alerts:
             out.insights.append(Insight(kind="risk", title=alert, severity="warning"))
@@ -173,6 +175,9 @@ class FinanceBudgetSkill(Skill):
                     out.recommendations.append(
                         Recommendation(
                             title="Enrayer la baisse des encaissements",
+                            expected_metric=TargetMetric(
+                                metric="finance.collections_trend", direction="increase", target=0.0
+                            ),
                             rationale="La tendance mensuelle est négative : prioriser relances, rétention et ventes.",
                             impact=8,
                             effort=5,
@@ -201,6 +206,9 @@ class FinanceBudgetSkill(Skill):
             out.recommendations.append(
                 Recommendation(
                     title=f"Relancer {len(overdue)} facture(s) échue(s) ({total})",
+                    expected_metric=TargetMetric(
+                        metric="finance.receivables", direction="decrease", target=float(status.receivables - total)
+                    ),
                     rationale="Une créance n'ouvre aucun budget tant qu'elle n'est pas encaissée.",
                     impact=min(10, 4 + 10 * weight),
                     effort=1.5,
@@ -217,6 +225,7 @@ class FinanceBudgetSkill(Skill):
             out.recommendations.append(
                 Recommendation(
                     title=f"Statuer sur {status.pending_review} dépense(s) en revue",
+                    expected_metric=TargetMetric(metric="finance.pending_review", direction="decrease", target=0.0),
                     rationale="Des dépenses importantes attendent une validation humaine.",
                     impact=4,
                     effort=1,

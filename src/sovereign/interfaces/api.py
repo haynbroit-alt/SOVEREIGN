@@ -240,6 +240,17 @@ def create_api(app: "Sovereign", *, mount_mcp: bool = True, mcp_host: str = "127
         except WebhookError as exc:
             raise HTTPException(status_code=exc.status, detail=str(exc)) from exc
 
+    @api.post("/v1/workspace/import-csv/{kind}", tags=["données"])
+    async def workspace_import_csv(kind: str, request: Request, who: Admin) -> dict[str, Any]:
+        from sovereign.importers import import_csv
+
+        body = await request.body()
+        mapping = {k.removeprefix("map."): v for k, v in request.query_params.items() if k.startswith("map.")}
+        options: dict[str, Any] = {"decimal": request.query_params.get("decimal", "auto")}
+        if kind in ("collections", "campaigns"):
+            options["mapping"] = mapping
+        return import_csv(app, kind, body, **options).as_dict()
+
     @api.post("/v1/workspace/import", tags=["données"])
     def workspace_import(data: dict[str, Any], who: Admin) -> dict[str, Any]:
         return import_workspace(app, data, actor=f"api:{who.name}")

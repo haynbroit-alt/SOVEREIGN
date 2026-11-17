@@ -58,7 +58,21 @@ JSON publiés, et ses tests. Le directeur **ne charge que les Skills pertinentes
 
 ## Vos données
 
-`sovereign data import mon-entreprise.yaml` — même format que la démo
+**Exports CSV, tels quels** (relevé bancaire, export de paiements, rapport de campagnes publicitaires…) :
+
+```bash
+sovereign data import-csv collections releve.csv          # seul l'argent RÉELLEMENT reçu est importé
+sovereign data import-csv campaigns rapport-annonces.csv --channel google_ads
+sovereign data import-csv segment segments.csv            # n'importe quel type de données (market, need…)
+```
+
+Séparateur, encodage, nombres (« 1 234,56 € », « 1,234.56 ») et dates (« 05/11/2026 ») sont détectés ;
+les en-têtes FR/EN courants sont reconnus (« Montant », « Crédit », « Statut », « Coût », « Impr. »,
+« Conv. value »…) et `--map champ=colonne` couvre le reste. Statuts non payés, devises étrangères et dates
+futures sont refusés ; réimporter un fichier ne double rien. Aussi disponible en API
+(`POST /v1/workspace/import-csv/{kind}`) et en MCP (outil `import_csv`).
+
+**Fichier complet** : `sovereign data import mon-entreprise.yaml` — même format que la démo
 (`src/sovereign/data/demo_workspace.yaml`) : marchés, concurrents, besoins, segments, campagnes, modèles
 économiques, agents et missions, signaux, risques, dépendances techniques, projets et KPI, idées, objectifs,
 encaissements, factures, dépenses (soumises au garde-fou), croyances, décisions passées.
@@ -79,7 +93,7 @@ Variables `SOVEREIGN_*` ou `~/.sovereign/sovereign.toml` : `SOVEREIGN_HOME`, `SO
 ## Qualité
 
 ```bash
-uv run pytest -o addopts="" -q --cov=sovereign    # 240 tests, couverture ≈ 92 %
+uv run pytest -o addopts="" -q --cov=sovereign    # 262 tests (Python 3.12 à 3.14), couverture ≈ 92 %
 uv run ruff check src tests && uv run mypy
 ```
 
