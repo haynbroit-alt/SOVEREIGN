@@ -22,3 +22,6 @@
   `brain/` (boucle cognitive, conseil, simulation), `skills/` + `skills/catalog/` (10 Skills et SKILL.md),
   `automation/` (file, cycles, webhooks), `commands/` (15 commandes), `interfaces/` (CLI, API, MCP),
   `ecosystem.py` (observation de dépôts), `importers.py` (CSV), `workspace.py` (YAML) ; tests miroirs dans `tests/`.
+- Écosystème : avant de travailler dans un autre dépôt qui n'a pas de section « Sobriété », y ajouter ce kit dans la
+  même PR — cette section (avec la carte de ce dépôt) et un `.claude/settings.json` (`bashOutputMaxChars` +
+  lecture interdite de ses dossiers lourds). L'environnement cloud « Default » plafonne déjà les sorties Bash.
