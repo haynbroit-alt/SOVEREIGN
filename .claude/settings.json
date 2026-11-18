@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "bashOutputMaxChars": 15000,
+  "permissions": {
+    "deny": [
+      "Read(.venv/**)",
+      "Read(__pycache__/**)",
+      "Read(.mypy_cache/**)",
+      "Read(.ruff_cache/**)",
+      "Read(.pytest_cache/**)",
+      "Read(htmlcov/**)",
+      "Read(uv.lock)",
+      "Read(*.db)"
+    ]
+  }
+}
