@@ -302,6 +302,19 @@ MIGRATIONS: list[str] = [
         at TEXT NOT NULL
     );
     """,
+    # 2 — l'ajout seul résiste à INSERT OR REPLACE : il supprime la ligne en conflit sans déclencher
+    #     BEFORE DELETE (recursive_triggers est inactif par défaut), ce qui réécrivait registre et audit.
+    """
+    CREATE TRIGGER ledger_no_replace BEFORE INSERT ON ledger
+        WHEN EXISTS (SELECT 1 FROM ledger WHERE id = NEW.id OR reference = NEW.reference)
+        BEGIN SELECT RAISE(ABORT, 'ledger is append-only'); END;
+    CREATE TRIGGER expenses_no_replace BEFORE INSERT ON expenses
+        WHEN EXISTS (SELECT 1 FROM expenses WHERE id = NEW.id OR reference = NEW.reference)
+        BEGIN SELECT RAISE(ABORT, 'expenses cannot be replaced'); END;
+    CREATE TRIGGER audit_no_replace BEFORE INSERT ON audit_log
+        WHEN EXISTS (SELECT 1 FROM audit_log WHERE seq = NEW.seq)
+        BEGIN SELECT RAISE(ABORT, 'audit log is append-only'); END;
+    """,
 ]
 
 

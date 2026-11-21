@@ -61,7 +61,8 @@ Une recommandation déjà adoptée ou en attente de validation n'est pas re-dél
 
 1. **Aucun accès bancaire** : aucun code ne peut émettre un paiement.
 2. **10 % des encaissements réels**, plafond refusé au démarrage s'il est dépassé ; transaction exclusive par demande.
-3. **Append-only** (registre, audit) imposé par triggers SQL ; montants approuvés immuables.
+3. **Append-only** (registre, audit) imposé par triggers SQL — `UPDATE`, `DELETE` et `INSERT OR REPLACE` refusés ;
+   montants approuvés immuables. Limite : un accès direct au fichier de base permet de supprimer les triggers.
 4. **Revue humaine** pour tout risque élevé ; aucune approbation possible par un agent via MCP.
 5. **IA budgétée et non décisionnaire** (ADR 0004).
 6. Clés d'API à portées (empreintes SHA-256), webhooks HMAC avec anti-rejeu, DNS-rebinding protégé pour MCP local.

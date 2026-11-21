@@ -153,10 +153,11 @@ def test_csv_import_over_api_and_mcp(app, api):
     async def scenario():
         async with Client(build_mcp(app)) as client:
             # Un agent ne déclare jamais d'encaissement : il ouvrirait son propre budget.
-            refused = await client.call_tool(
-                "import_csv", {"kind": "collections", "csv_text": "date,amount\n2026-11-04,200\n"}
-            )
-            assert refused.is_error
+            for kind in ("collections", "encaissements"):  # l'alias français est refusé dès la surface, lui aussi
+                refused = await client.call_tool(
+                    "import_csv", {"kind": kind, "csv_text": "date,amount\n2026-11-04,200\n"}
+                )
+                assert refused.is_error
             tools = {t.name for t in (await client.list_tools()).tools}
             assert "record_revenue" not in tools
             via_skill = await client.call_tool(

@@ -198,7 +198,7 @@ def build_mcp(app: Sovereign) -> MCPServer:
 
         if decimal not in ("auto", "comma", "dot"):
             raise ValueError("decimal : auto | comma | dot")
-        if kind == "collections":
+        if kind in ("collections", "encaissements"):
             raise ValueError("encaissements réservés aux humains (un agent ouvrirait son propre budget)")
         return import_csv(app, kind, csv_text.encode("utf-8"), decimal=decimal, actor="mcp").as_dict()
 
