@@ -102,6 +102,43 @@ def test_ledger_and_amounts_are_immutable_in_sql(funded):
         funded.db.execute("DELETE FROM expenses")
 
 
+def test_replace_cannot_rewrite_ledger_expenses_or_audit(funded):
+    """INSERT OR REPLACE supprime la ligne en conflit sans déclencher BEFORE DELETE (recursive_triggers inactif)."""
+
+    expense = funded.finance.request_expense("50", "tools").expense
+    ledger_id = funded.db.scalar("SELECT id FROM ledger")
+    attacks = [
+        (  # même identifiant : réécrire un encaissement gonflerait l'enveloppe de 10 %
+            "INSERT OR REPLACE INTO ledger(id, entry_type, amount_cents, currency, occurred_on, created_at) "
+            "VALUES (?, 'collection', 99999999, 'EUR', '2026-11-01', 't')",
+            (ledger_id,),
+        ),
+        (  # même référence unique, identifiant neuf
+            "REPLACE INTO ledger(id, entry_type, amount_cents, currency, occurred_on, reference, created_at) "
+            "VALUES ('led_x', 'collection', 99999999, 'EUR', '2026-11-01', 'seed-1', 't')",
+            (),
+        ),
+        (
+            "INSERT OR REPLACE INTO expenses(id, amount_cents, currency, category, status, created_at) "
+            "VALUES (?, 1, 'EUR', 'tools', 'approved', 't')",
+            (expense.id,),
+        ),
+        (
+            "INSERT OR REPLACE INTO audit_log(seq, at, actor, action, entity) VALUES (1, 't', 'falsifié', 'a', 'e')",
+            (),
+        ),
+    ]
+    for sql, params in attacks:
+        with pytest.raises(sqlite3.IntegrityError):
+            funded.db.execute(sql, params)
+    assert funded.db.scalar("SELECT amount_cents FROM ledger WHERE id = ?", (ledger_id,)) == 1_000_000
+    assert funded.db.scalar("SELECT amount_cents FROM expenses WHERE id = ?", (expense.id,)) == 5_000
+    assert funded.db.scalar("SELECT actor FROM audit_log WHERE seq = 1") != "falsifié"
+    # L'usage normal reste intact : nouvel encaissement, puis doublon de référence reconnu sans erreur.
+    funded.finance.record_collection("10", "2026-11-02", reference="seed-2")
+    assert funded.finance.record_collection("10", "2026-11-02", reference="seed-2").duplicate
+
+
 def test_foreign_currency_refused(funded):
     with pytest.raises(FinanceError):
         funded.finance.record_collection("10", currency="USD")
